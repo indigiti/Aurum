@@ -3,11 +3,11 @@
 ## Package layout
 - Copy the contents of `aurum/public_html/` into Cloudways document root `public_html/aurum/`.
 - Copy `aurum-private/` into the application root beside `public_html`, never into the public document root.
-- Configure PHP environment variable `AURUM_PRIVATE_PATH` to the absolute path of that private directory. PHP 8.2+, curl, PDO and PDO_MySQL are required.
+- Copy `aurum-private/backend/config.example.php` to `aurum-private/config/local.php`, create the `config` directory if needed, and set private values there. Configure `AURUM_PRIVATE_PATH` only if the default sibling path is different. PHP 8.2+, curl, PDO and PDO_MySQL are required.
 - Build uses Node.js in GitHub Actions only. Cloudways does not run Node or Python for this application.
 
 ## Database-free staging
-- Set `APP_ENV=staging`, `STORAGE_DRIVER=json`, `AURUM_PRIVATE_PATH=/absolute/app/path/aurum-private`.
+- In `config/local.php`, set `APP_ENV=staging`, `STORAGE_DRIVER=json`, and `AURUM_ADMIN_EMAILS` to the exact administrator email addresses.
 - Ensure PHP can create `aurum-private/private-storage` with permissions restricted to the application user.
 - Keep staging behind HTTPS and Cloudways access restrictions. The demo registration is not production-ready identity management.
 - Exclude `/aurum/api/*` from page caching. API responses are private/no-store except public market candles.
@@ -15,8 +15,8 @@
 
 ## MariaDB cutover
 - Create a MariaDB database and import `aurum-private/database/schema.sql`.
-- Set `APP_ENV=production`, `STORAGE_DRIVER=mariadb`, `AURUM_PRIVATE_PATH`, `DB_DSN=mysql:host=HOST;dbname=DATABASE;charset=utf8mb4`, `DB_USER`, `DB_PASSWORD`, and `AURUM_ADMIN_EMAILS`.
-- Back up the JSON private-storage directory. Run the one-time migration from a trusted shell: `php aurum-private/backend/migrate-json-to-mariadb.php` with the same private environment variables. It inserts missing account scopes, verifies existing rows, refuses conflicting overwrites and retains JSON source files.
+- In `config/local.php`, set `APP_ENV=production`, `STORAGE_DRIVER=mariadb`, `DB_DSN=mysql:host=HOST;dbname=DATABASE;charset=utf8mb4`, `DB_USER`, `DB_PASSWORD`, and `AURUM_ADMIN_EMAILS`.
+- Back up the JSON private-storage directory. Run the one-time migration from a trusted shell: `php aurum-private/backend/migrate-json-to-mariadb.php`; it reads the private configuration file. It inserts missing account scopes, verifies existing rows, refuses conflicting overwrites and retains JSON source files.
 - Switch `STORAGE_DRIVER=mariadb` only after migration verification. Never fall back to JSON in production.
 
 ## Operational limitations
