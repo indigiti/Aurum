@@ -21,7 +21,10 @@ function aurum_send(array $data,int $code=200): never {http_response_code($code)
 $_SESSION['csrf']??=bin2hex(random_bytes(32));
 $method=$_SERVER['REQUEST_METHOD'];
 if(!in_array($method,['GET','POST'],true))aurum_send(['error'=>'Method not allowed'],405);
-if($method==='GET'&&!isset($_SESSION['uid'])){\n    $publicRules=Challenges::current(aurum_storage());\n    aurum_send(['csrf'=>$_SESSION['csrf'],'authenticated'=>false,'challengeRules'=>$publicRules]);\n}
+if($method==='GET'&&!isset($_SESSION['uid'])){
+    $publicRules=Challenges::current(aurum_storage());
+    aurum_send(['csrf'=>$_SESSION['csrf'],'authenticated'=>false,'challengeRules'=>$publicRules]);
+}
 try{
     $body=[];
     if($method==='POST'){
