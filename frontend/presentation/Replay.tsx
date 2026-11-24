@@ -3,11 +3,13 @@ import {useEffect,useRef,useState} from 'react';
 import {createChart,ColorType,type ISeriesApi,type UTCTimestamp} from 'lightweight-charts';
 type Row={time:UTCTimestamp;open:number;high:number;low:number;close:number;confirmed?:boolean};
 import {apiPath,type ApiClient} from '../application/ports';
-export default function Replay({client}:{client:ApiClient}){
+import {chartTheme} from './chartTheme';
+import type {Theme} from './useAppearance';
+export default function Replay({client,theme='dark'}:{client:ApiClient;theme?:Theme}){
  const [bar,setBar]=useState('15m');const [rows,setRows]=useState<Row[]>([]);const [cursor,setCursor]=useState(0);const [playing,setPlaying]=useState(false);const [speed,setSpeed]=useState(500);const [message,setMessage]=useState('Load confirmed historical candles to start.');
  const host=useRef<HTMLDivElement>(null);const series=useRef<ISeriesApi<'Candlestick'>|undefined>(undefined);
- useEffect(()=>{if(!host.current)return;const el=host.current;const chart=createChart(el,{width:el.clientWidth,height:380,layout:{background:{type:ColorType.Solid,color:'#101722'},textColor:'#8795a7'},grid:{vertLines:{color:'#202a38'},horzLines:{color:'#202a38'}},timeScale:{timeVisible:true}});series.current=chart.addCandlestickSeries({upColor:'#2ccca0',downColor:'#ef6b77',borderVisible:false,wickUpColor:'#2ccca0',wickDownColor:'#ef6b77'});const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth}));ro.observe(el);return()=>{ro.disconnect();chart.remove();series.current=undefined}},[]);
- useEffect(()=>{series.current?.setData(rows.slice(0,cursor));},[rows,cursor]);
+ useEffect(()=>{if(!host.current)return;const el=host.current;const chart=createChart(el,{width:el.clientWidth,height:380,...chartTheme(theme)});series.current=chart.addCandlestickSeries({upColor:'#2ccca0',downColor:'#ef6b77',borderVisible:false,wickUpColor:'#2ccca0',wickDownColor:'#ef6b77'});const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth}));ro.observe(el);return()=>{ro.disconnect();chart.remove();series.current=undefined}},[theme]);
+ useEffect(()=>{series.current?.setData(rows.slice(0,cursor));},[rows,cursor,theme]);
  useEffect(()=>{if(!playing||cursor>=rows.length)return;const id=setTimeout(()=>setCursor(v=>Math.min(v+1,rows.length)),speed);return()=>clearTimeout(id)},[playing,cursor,rows.length,speed]);
  useEffect(()=>{if(cursor>=rows.length)setPlaying(false)},[cursor,rows.length]);
  async function load(){setPlaying(false);setRows([]);setCursor(0);setMessage('Loading…');try{const res=await client.request(apiPath('market')+'?action=candles&bar='+bar+'&limit=300');const j=res.data;if(!res.ok||!Array.isArray(j.data))throw Error('Historical data unavailable');const confirmed:Row[]=j.data.filter((r:Row)=>r.confirmed===true);if(confirmed.length<2)throw Error('Insufficient confirmed candles');setRows(confirmed);setCursor(Math.min(20,confirmed.length));setMessage('Historical study only. No live orders are placed from replay.')}catch(e){setMessage(e instanceof Error?e.message:'Unable to load')}}
