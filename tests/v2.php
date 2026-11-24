@@ -63,3 +63,11 @@ $r2=\Aurum\TradeService::execute($state,$q,'bulk-close',$body);ck($r2['error']==
 $snap=\Aurum\Exposure::snapshot($state['account']);$r=\Aurum\TradeService::execute($state,$q,'bulk-close',['mode'=>'flatten','snapshot'=>$snap,'requestId'=>'flatten-test-12345678']);
 ck($r['error']===null&&!$state['account']['positions']&&!$state['account']['pending'],'Flatten closes positions and cancels pending');
 echo "Exposure, matched closing, stale snapshot and flatten tests passed\n";
+
+require_once __DIR__.'/../backend/Domain/TradingTools.php';
+$toolsBook=\Aurum\Engine::account(100000);$q=['bid'=>400000,'ask'=>400025,'ts'=>(int)(microtime(true)*1000)];
+\Aurum\Engine::mark($toolsBook,$q);$pid=\Aurum\Engine::open($toolsBook,$q,['side'=>'buy','units'=>3]);$q['bid']+=100;$q['ask']+=100;
+\Aurum\TradingTools::breakEven($toolsBook,$q,[$pid]);ck($toolsBook['positions'][$pid]['sl']===400025,'Break even at entry');
+\Aurum\TradingTools::basket($toolsBook,$q,[$pid],['tp'=>4010]);ck($toolsBook['positions'][$pid]['tp']===401000,'Basket target');
+$alert=\Aurum\TradingTools::alert($toolsBook,['direction'=>'above','price'=>4001],$q);\Aurum\TradingTools::observeAlerts($toolsBook,$q);ck($toolsBook['alerts'][$alert]['status']==='triggered','Alert observes executable bid');
+echo "Trading tools tests passed\n";

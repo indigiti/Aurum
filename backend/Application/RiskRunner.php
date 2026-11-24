@@ -13,7 +13,7 @@ final class RiskRunner {
                     $a=&$s['account'];
                     if(!is_array($a)||!in_array($a['status'],['active','locked'],true)||$q['ts']<=$a['quoteTs'])return null;
                     if(abs((int)(microtime(true)*1000)-$q['ts'])>10000)throw new \RuntimeException('Quote expired during account sweep');
-                    Engine::mark($a,$q);return $a['status'];
+                    Engine::mark($a,$q);if(class_exists(TradingTools::class))TradingTools::observeAlerts($a,$q);return $a['status'];
                 });
                 if($result!==null){$processed++;if($result==='failed')$failed++;}
             }catch(\Throwable $ex){$errors++;error_log('Aurum risk sweep: '.get_class($ex));}

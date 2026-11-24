@@ -16,8 +16,9 @@ final class Backtester {
         }
         return $out;
     }
-    public static function run(array $candles,int $fast,int $slow,int $units,float $spread,float $slippageBps,float $feePerLot,string $method='SMA',string $mode='long'): array {
+    public static function run(array $candles,int $fast,int $slow,int $units,float $spread,float $slippageBps,float $feePerLot,string $method='SMA',string $mode='long',float $stopDistance=0,float $targetDistance=0): array {
         if($fast<2||$fast>50||$slow<5||$slow>200||$fast>=$slow||$units<1||$units>1000||$spread<0||$spread>10||$slippageBps<0||$slippageBps>100||$feePerLot<0||$feePerLot>50||!in_array($method,['SMA','EMA'],true)||!in_array($mode,['long','short','both'],true))throw new \InvalidArgumentException('Backtest parameters outside limits');
+        if(!is_finite($stopDistance)||!is_finite($targetDistance)||$stopDistance<0||$targetDistance<0||$stopDistance>10000||$targetDistance>10000)throw new \InvalidArgumentException('Invalid strategy distances');
         $rows=self::confirmed($candles);
         if(count($rows)<$slow+3)throw new \InvalidArgumentException('Not enough confirmed candles for selected slow period');
         $closes=array_map(static fn($c)=>(float)$c['close'],$rows);$f=self::ma($closes,$fast,$method);$s=self::ma($closes,$slow,$method);
@@ -31,6 +32,15 @@ final class Backtester {
             if($pnl>0){$wins++;$grossWin+=$pnl;}elseif($pnl<0){$losses++;$grossLoss+=abs($pnl);}$position=null;
         };
         for($i=$slow;$i<count($rows)-1;$i++){
+            if($position!==null&&($stopDistance>0||$targetDistance>0)){
+                $dir=$position['direction'];$entry=$position['entry'];$stop=$entry-$dir*$stopDistance;$target=$entry+$dir*$targetDistance;
+                $row=$rows[$i];$open=(float)$row['open'];$low=(float)$row['low'];$high=(float)$row['high'];
+                $hitStop=$stopDistance>0&&($dir===1?$low<=$stop:$high>=$stop);
+                $hitTarget=$targetDistance>0&&($dir===1?$high>=$target:$low<=$target);
+                // OHLC cannot establish intrabar sequence; assume stop first and adverse gap fills.
+                if($hitStop)$close($dir===1?min($open,$stop):max($open,$stop),(int)$row['time'],'stop-distance');
+                elseif($hitTarget)$close($target,(int)$row['time'],'target-distance');
+            }
             $up=$f[$i-1]<=$s[$i-1]&&$f[$i]>$s[$i];$down=$f[$i-1]>=$s[$i-1]&&$f[$i]<$s[$i];
             if(!$up&&!$down)continue;
             $direction=$up?1:-1;$next=(float)$rows[$i+1]['open'];$time=(int)$rows[$i+1]['time'];
@@ -41,7 +51,7 @@ final class Backtester {
         $count=count($trades);
         return ['strategy'=>$method.' crossover '.$mode,'fast'=>$fast,'slow'=>$slow,'units'=>$units,'barCount'=>count($rows),
             'firstTimestamp'=>(int)$rows[0]['time'],'lastTimestamp'=>(int)$rows[array_key_last($rows)]['time'],
-            'spreadAssumption'=>$spread,'slippageBps'=>$slippageBps,'roundTripFeePerLot'=>$feePerLot,'trades'=>$count,'wins'=>$wins,'losses'=>$losses,'breakeven'=>$count-$wins-$losses,
+            'stopDistance'=>$stopDistance,'targetDistance'=>$targetDistance,'spreadAssumption'=>$spread,'slippageBps'=>$slippageBps,'roundTripFeePerLot'=>$feePerLot,'trades'=>$count,'wins'=>$wins,'losses'=>$losses,'breakeven'=>$count-$wins-$losses,
             'winRatePct'=>$count?$wins/$count*100:0,'netPnl'=>$equity,'grossProfit'=>$grossWin,'grossLoss'=>$grossLoss,
             'profitFactor'=>$grossLoss?$grossWin/$grossLoss:null,'maxClosedTradeDrawdown'=>$maxDd,'tradeList'=>array_slice($trades,-100)];
     }

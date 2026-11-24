@@ -24,7 +24,9 @@ try{
     $method=$body['method']??'SMA';$mode=$body['mode']??'long';if(!is_string($method)||!is_string($mode))throw new InvalidArgumentException('Invalid strategy');
     $candles=aurum_market()->candles($bar,300);
     if(($body['research']??false)===true){backtest_send(['research'=>Backtester::optimize($candles,$units,$spread,$slippage,$fee,$method,$mode)]);}
-    $result=Backtester::run($candles,$fast,$slow,$units,$spread,$slippage,$fee,$method,$mode);
+    $stop=filter_var($body['stopDistance']??0,FILTER_VALIDATE_FLOAT);$target=filter_var($body['targetDistance']??0,FILTER_VALIDATE_FLOAT);
+    if($stop===false||$target===false)throw new InvalidArgumentException('Invalid strategy distances');
+    $result=Backtester::run($candles,$fast,$slow,$units,$spread,$slippage,$fee,$method,$mode,$stop,$target);
     $id=bin2hex(random_bytes(10));
     $save=function(array &$s)use($id,$result,$bar){if(!is_array($s['account']??null))throw new RuntimeException();$s['account']['backtests'][]=['id'=>$id,'bar'=>$bar,'createdAt'=>time(),'result'=>$result];if(count($s['account']['backtests'])>20)$s['account']['backtests']=array_slice($s['account']['backtests'],-20);};
     if($demo)$save($_SESSION['demo']);else $store->transaction(Accounts::scope($uid,$accountId),$save);

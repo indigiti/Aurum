@@ -69,6 +69,21 @@ final class OkxFeed implements \Aurum\MarketFeed {
         return ['symbol'=>self::SYMBOL,'instrument'=>self::INSTRUMENT,'provider'=>'OKX','quoteCurrency'=>'USDT','proxy'=>true,'bid'=>$bid,'ask'=>$ask,'last'=>$last,'timestamp'=>$ts,'stale'=>$age>10000||$age< -5000];
         });
     }
+    public function depth(): array {
+        return $this->cached('depth',1,function(){
+            $r=$this->request('books',['sz'=>20])[0];$out=['timestamp'=>(int)($r['ts']??0),'bids'=>[],'asks'=>[]];
+            if($out['timestamp']<=0)throw new \RuntimeException('Invalid depth timestamp');
+            foreach(['bids','asks'] as $side){
+                foreach(array_slice($r[$side]??[],0,20) as $row){
+                    $p=(float)($row[0]??0);$n=(float)($row[1]??0);
+                    if(!is_finite($p)||!is_finite($n)||$p<=0||$n<0)throw new \RuntimeException('Invalid depth');
+                    $out[$side][]=['price'=>$p,'contracts'=>$n];
+                }
+            }
+            if(!$out['bids']||!$out['asks'])throw new \RuntimeException('Empty depth');
+            return $out;
+        });
+    }
     public function candles(string $bar='1m', int $limit=100): array {
         if (!in_array($bar,['1m','5m','15m','30m','1H','4H','1Dutc'],true) || $limit<1 || $limit>300) throw new \InvalidArgumentException('Invalid candle parameters');
         return $this->cached('candles-'.$bar.'-'.$limit,15,function()use($bar,$limit){
@@ -76,7 +91,7 @@ final class OkxFeed implements \Aurum\MarketFeed {
             $out=[];
             foreach(array_reverse($rows) as $r) {
                 if(count($r)<9 || (int)$r[0]<=0) throw new \RuntimeException('Invalid candle');
-                $out[]=['time'=>intdiv((int)$r[0],1000),'open'=>(float)$r[1],'high'=>(float)$r[2],'low'=>(float)$r[3],'close'=>(float)$r[4],'confirmed'=>$r[8]==='1'];
+                $out[]=['time'=>intdiv((int)$r[0],1000),'open'=>(float)$r[1],'high'=>(float)$r[2],'low'=>(float)$r[3],'close'=>(float)$r[4],'confirmed'=>$r[8]==='1','volume'=>(float)$r[6]];
             }
             return $out;
         });
