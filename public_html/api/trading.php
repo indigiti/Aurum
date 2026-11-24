@@ -3,6 +3,7 @@ declare(strict_types=1);
 use Aurum\Engine;
 use Aurum\Identity;
 use Aurum\Accounts;
+use Aurum\NewsCalendar;
 use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
@@ -86,7 +87,7 @@ try{
         $newId=Accounts::create($store,$uid,$identity['email'],$size,Challenges::current($store));
         aurum_send(['accounts'=>Accounts::listing($store,$uid),'createdAccountId'=>$newId]);
     }
-    $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}}
+    $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=NewsCalendar::decorate(Engine::quote((new OkxFeed())->ticker()),NewsCalendar::current($store));}catch(Throwable $e){}}
     $result=$store->transaction(Accounts::scope($uid,$accountId),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
         $a=&$s['account'];Engine::ensureLedger($a);$error=null;$id=null;
@@ -111,7 +112,7 @@ try{
             }
         }
         $view=$a;unset($view['requests']);$view['margin']=Engine::margin($a);
-        return ['account'=>$view,'feed'=>$q===null?'offline':'live','error'=>$error,'id'=>$id];
+        return ['account'=>$view,'feed'=>$q===null?'offline':'live','newsStatus'=>$q['newsStatus']??'unknown','error'=>$error,'id'=>$id];
     });
     aurum_send($result+['authenticated'=>true,'role'=>$role,'csrf'=>$csrf,'accountId'=>$accountId],$result['error']===null?200:409);
 }catch(InvalidArgumentException|JsonException $e){aurum_send(['error'=>'Invalid request or credentials'],400);}

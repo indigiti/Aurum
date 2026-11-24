@@ -12,7 +12,7 @@ $store=aurum_storage();
 do{
     $status=['timestamp'=>time(),'mode'=>$loop?'polling-loop':'cron','status'=>'offline'];
     try{
-        $q=\Aurum\Engine::quote((new \Aurum\MarketData\OkxFeed())->ticker());
+        $q=\Aurum\NewsCalendar::decorate(\Aurum\Engine::quote((new \Aurum\MarketData\OkxFeed())->ticker()),\Aurum\NewsCalendar::current($store));
         $status=array_merge($status,\Aurum\RiskRunner::sweep($store,$q),['quoteTs'=>$q['ts'],'status'=>'observed']);
     }catch(Throwable $e){error_log('Aurum worker: '.get_class($e));}
     $tmp=tempnam($dir,'worker-');

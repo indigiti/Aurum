@@ -7,7 +7,7 @@ final class Engine {
         $rules=Challenges::validate($rules?:Challenges::defaults());
         if(!in_array($dollars,$rules['accountSizes'],true))throw new \InvalidArgumentException('Invalid challenge');
         $base=$dollars*100;
-        return ['initial'=>$base,'balance'=>$base,'equity'=>$base,'dayBase'=>$base,'day'=>gmdate('Y-m-d'),'phase'=>1,'status'=>'active','rules'=>$rules,'positions'=>[],'pending'=>[],'journal'=>[],'requests'=>[],'days'=>[],'quoteTs'=>0,'equityCurve'=>[],'phaseHistory'=>[],'riskEvents'=>[],'backtests'=>[],'ledger'=>[['id'=>bin2hex(random_bytes(16)),'type'=>'opening-capital','delta'=>$base,'balance'=>$base,'timestamp'=>time()*1000,'phase'=>1]],'createdAt'=>time()];
+        return ['initial'=>$base,'balance'=>$base,'equity'=>$base,'dayBase'=>$base,'day'=>gmdate('Y-m-d'),'phase'=>1,'status'=>'active','attemptId'=>bin2hex(random_bytes(16)),'rules'=>$rules,'positions'=>[],'pending'=>[],'journal'=>[],'requests'=>[],'days'=>[],'quoteTs'=>0,'equityCurve'=>[],'phaseHistory'=>[],'riskEvents'=>[],'backtests'=>[],'ledger'=>[['id'=>bin2hex(random_bytes(16)),'type'=>'opening-capital','delta'=>$base,'balance'=>$base,'timestamp'=>time()*1000,'phase'=>1]],'createdAt'=>time()];
     }
     public static function quote(array $q): array {
         $bid=(int)round((float)($q['bid']??0)*100);$ask=(int)round((float)($q['ask']??0)*100);$ts=(int)($q['timestamp']??0);
@@ -37,7 +37,7 @@ final class Engine {
         if($units<1||$units>$p['units'])throw new \InvalidArgumentException('Invalid closing size');
         $p['units']=$units;$pnl=self::pnl($p,$q);$fillId=bin2hex(random_bytes(16));
         self::book($a,$pnl,'realized-pnl',$q['ts'],$fillId);
-        $a['journal'][]=$p+['fillId'=>$fillId,'phase'=>$a['phase'],'exit'=>$p['side']==='buy'?$q['bid']:$q['ask'],'pnl'=>$pnl,'closedAt'=>$q['ts'],'reason'=>$reason];
+        $a['journal'][]=$p+['fillId'=>$fillId,'attemptId'=>$a['attemptId']??null,'phase'=>$a['phase'],'exit'=>$p['side']==='buy'?$q['bid']:$q['ask'],'pnl'=>$pnl,'closedAt'=>$q['ts'],'reason'=>$reason];
         $a['positions'][$id]['units']-=$units;
         if($a['positions'][$id]['units']===0)unset($a['positions'][$id]);
         $a['days'][$a['day']]=true;
@@ -63,6 +63,7 @@ final class Engine {
     }
     private static function openAt(array &$a,array $q,array $r,int $entry): string {
         if($a['status']!=='active')throw new \InvalidArgumentException('Account locked');
+        if(($a['rules']['newsRestricted']??false)&&($q['newsStatus']??'unconfigured-or-expired')!=='clear')throw new \InvalidArgumentException('New exposure blocked by economic calendar');
         $side=$r['side']??'';$units=filter_var($r['units']??null,FILTER_VALIDATE_INT);
         if(!in_array($side,['buy','sell'],true)||$units===false||$units<1||$units>1000)throw new \InvalidArgumentException('Invalid order size');
         $levels=[];
@@ -86,6 +87,7 @@ final class Engine {
     }
     public static function placePending(array &$a,array $q,array $r): string {
         if($a['status']!=='active')throw new \InvalidArgumentException('Account locked');
+        if(($a['rules']['newsRestricted']??false)&&($q['newsStatus']??'unconfigured-or-expired')!=='clear')throw new \InvalidArgumentException('New exposure blocked by economic calendar');
         $type=$r['type']??'';$side=str_starts_with((string)$type,'buy-')?'buy':'sell';
         if(!in_array($type,['buy-limit','sell-limit','buy-stop','sell-stop'],true))throw new \InvalidArgumentException('Invalid pending type');
         $units=filter_var($r['units']??null,FILTER_VALIDATE_INT);$price=$r['price']??null;
@@ -130,9 +132,12 @@ final class Engine {
                 default=>false
             };
             if($trigger){
+                if(($a['rules']['newsRestricted']??false)&&($q['newsStatus']??'unconfigured-or-expired')!=='clear')continue;
                 unset($a['pending'][$id]);
                 try{self::openAt($a,$q,['side'=>$p['side'],'units'=>$p['units'],'sl'=>$p['sl'],'tp'=>$p['tp']],$p['side']==='buy'?$q['ask']:$q['bid']);}
                 catch(\InvalidArgumentException $e){$a['riskEvents'][]=['type'=>'pending-rejected','id'=>$id,'message'=>$e->getMessage(),'timestamp'=>$q['ts']];}
+                $a['equity']=$a['balance'];foreach($a['positions'] as $p)$a['equity']+=self::pnl($p,$q);
+                if(self::enforceRisk($a,$q))break;
             }
         }
         foreach($a['positions'] as $id=>$p){
@@ -150,7 +155,7 @@ final class Engine {
         else $a['equityCurve'][]=$point;
         if(count($a['equityCurve'])>1000)$a['equityCurve']=array_slice($a['equityCurve'],-1000);
         if(count($a['riskEvents'])>500)$a['riskEvents']=array_slice($a['riskEvents'],-500);
-        if($a['status']==='active'&&$a['phase']<3&&!$a['positions']&&!$a['pending']&&count($a['days'])>=(int)$rules['minTradingDays']&&$a['balance']>=$a['initial']*(1+(float)$rules['phaseTargets'][$a['phase']-1]/100)){
+        if($a['status']==='active'&&$a['phase']<3&&!$a['positions']&&!$a['pending']&&self::consistencyMet($a)&&count($a['days'])>=(int)$rules['minTradingDays']&&$a['balance']>=$a['initial']*(1+(float)$rules['phaseTargets'][$a['phase']-1]/100)){
             $a['phaseHistory'][]=['phase'=>$a['phase'],'completedAt'=>$q['ts'],'profit'=>$a['balance']-$a['initial']];self::book($a,$a['initial']-$a['balance'],'phase-capital-reset',$q['ts']);$a['phase']++;$a['equity']=$a['dayBase']=$a['initial'];$a['days']=[];
         }
     }
@@ -166,5 +171,16 @@ final class Engine {
             return true;
         }
         return false;
+    }
+    public static function consistencyMet(array $a): bool {
+        $limit=(float)($a['rules']['consistencyPct']??0);
+        if($limit<=0)return true;
+        $daily=[];
+        foreach($a['journal']??[] as $t){
+            if(($t['phase']??0)!==$a['phase']||($t['attemptId']??null)!==($a['attemptId']??null))continue;
+            $day=gmdate('Y-m-d',intdiv($t['closedAt'],1000));$daily[$day]=($daily[$day]??0)+$t['pnl'];
+        }
+        $net=$a['balance']-$a['initial'];
+        return $net>0&&$daily&&max($daily)*100<=$net*$limit;
     }
 }

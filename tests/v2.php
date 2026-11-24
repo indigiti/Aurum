@@ -6,6 +6,7 @@ require_once __DIR__.'/../backend/Engine.php';
 require_once __DIR__.'/../backend/Identity.php';
 require_once __DIR__.'/../backend/RiskRunner.php';
 require_once __DIR__.'/../backend/Accounts.php';
+require_once __DIR__.'/../backend/NewsCalendar.php';
 function ck(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 $user=[];$code=\Aurum\Identity::issue($user,1000);
 ck(!\Aurum\Identity::verify($user,str_repeat('a',32),1001),'Wrong code rejected');
@@ -23,5 +24,11 @@ $store->transaction(\Aurum\Accounts::scope($uid),static function(array &$s){$s['
 $id=\Aurum\Accounts::create($store,$uid,'trader@example.test',10000,\Aurum\Challenges::defaults());ck($id==='a1','Second challenge created');
 ck(count(\Aurum\Accounts::listing($store,$uid))===2,'Independent account listing');
 ck(count(\Aurum\Accounts::listing($store,$other))===0,'Other trader isolation');
+$now=time();$calendar=\Aurum\NewsCalendar::validate(['validUntil'=>$now+3600,'events'=>[['title'=>'Test event','timestamp'=>$now,'beforeMinutes'=>5,'afterMinutes'=>5]]]);
+$q=\Aurum\NewsCalendar::decorate(['bid'=>400000,'ask'=>400025,'ts'=>$now*1000],$calendar);
+ck($q['newsStatus']==='restricted','News window');
+$restricted=\Aurum\Engine::account(100000,array_merge(\Aurum\Challenges::defaults(),['newsRestricted'=>true]));
+$blocked=false;try{\Aurum\Engine::open($restricted,$q,['side'=>'buy','units'=>1]);}catch(InvalidArgumentException){$blocked=true;}
+ck($blocked,'Restricted account cannot open exposure');
 foreach(glob($dir.'/*')?:[] as $p)unlink($p);rmdir($dir);
 echo "Identity and background risk tests passed\n";

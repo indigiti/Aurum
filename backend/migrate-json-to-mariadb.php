@@ -17,7 +17,7 @@ try{
     }
     foreach(glob($dir.'/*.json')?:[] as $path){
         $scope=basename($path,'.json');
-        if(!preg_match('/^(?:user-[a-f0-9]{64}(?:-a[1-4])?|config-challenges)$/D',$scope))continue;
+        if(!preg_match('/^(?:user-[a-f0-9]{64}(?:-a[1-4])?|config-challenges|config-calendar)$/D',$scope))continue;
         $records[$scope]=json_decode((string)file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
     }
     if(!$records){fwrite(STDERR,"No account JSON records found in {$dir}\n");exit(3);}

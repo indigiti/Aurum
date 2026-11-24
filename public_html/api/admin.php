@@ -3,6 +3,7 @@ declare(strict_types=1);
 use Aurum\Challenges;
 use Aurum\Engine;
 use Aurum\Identity;
+use Aurum\NewsCalendar;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store, private');header('X-Content-Type-Options: nosniff');
@@ -27,13 +28,19 @@ try{
         $workerFile=aurum_private_root().'/private-storage/risk-worker-health.json';$worker=is_file($workerFile)?json_decode((string)file_get_contents($workerFile),true):null;
         $workerStatus=is_array($worker)&&time()-(int)($worker['timestamp']??0)<=15&&($worker['status']??'')==='observed'&&($worker['errors']??1)===0?'recent-observation':'not-running-or-stale';
         $system=['riskWorker'=>$workerStatus,'environment'=>aurum_config('APP_ENV','staging'),'storageDriver'=>$driver,'database'=>$database,'phpVersion'=>PHP_VERSION,'marketFeed'=>$market,'marketInstrument'=>OkxFeed::INSTRUMENT];
-        admin_send(['users'=>$users,'rules'=>$rules,'system'=>$system,'counts'=>['users'=>count($users),'active'=>count(array_filter($users,static fn($u)=>$u['status']==='active')),'failed'=>count(array_filter($users,static fn($u)=>$u['status']==='failed'))]]);
+        admin_send(['users'=>$users,'rules'=>$rules,'calendar'=>NewsCalendar::current($store),'system'=>$system,'counts'=>['users'=>count($users),'active'=>count(array_filter($users,static fn($u)=>$u['status']==='active')),'failed'=>count(array_filter($users,static fn($u)=>$u['status']==='failed'))]]);
     }
     if($_SERVER['REQUEST_METHOD']!=='POST')admin_send(['error'=>'Method not allowed'],405);
     if(!hash_equals($csrf,$_SERVER['HTTP_X_CSRF_TOKEN']??''))admin_send(['error'=>'CSRF rejected'],403);
     if((int)($_SERVER['CONTENT_LENGTH']??0)>16384)admin_send(['error'=>'Request too large'],413);
     $body=json_decode((string)file_get_contents('php://input'),true,32,JSON_THROW_ON_ERROR);if(!is_array($body))throw new InvalidArgumentException();
     $action=$body['action']??'';
+    if($action==='update-calendar'){
+        if(!is_array($body['calendar']??null))throw new InvalidArgumentException('Calendar required');
+        $calendar=NewsCalendar::validate($body['calendar']);
+        $store->transaction('config-calendar',static function(array &$s)use($calendar){$s['calendar']=$calendar;});
+        admin_send(['ok'=>true,'calendar'=>$calendar]);
+    }
     if($action==='update-rules'){
         $rules=Challenges::validate($body['rules']??[]);
         $store->transaction('config-challenges',function(array &$s)use($rules){$rules['version']=(int)($s['rules']['version']??0)+1;$s['rules']=$rules;});
