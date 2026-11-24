@@ -9,7 +9,7 @@ final class Backtester {
         $closes=array_map(static fn($c)=>(float)$c['close'],$rows);
         $sma=static fn(array $v,int $end,int $period):float=>array_sum(array_slice($v,$end-$period+1,$period))/$period;
         $open=null;$trades=[];$equity=0;$peak=0;$maxDd=0;$wins=0;$grossWin=0;$grossLoss=0;
-        $spreadCost=$spread/2;$feeCents=(int)round($feePerLot*($units/100)*200);
+        $spreadCost=$spread/2;$feeCents=(int)round($feePerLot*($units/100)*100);
         for($i=$slow;$i<count($rows)-1;$i++){
             $f0=$sma($closes,$i-1,$fast);$s0=$sma($closes,$i-1,$slow);$f1=$sma($closes,$i,$fast);$s1=$sma($closes,$i,$slow);
             $enter=$f0<=$s0&&$f1>$s1;$exit=$f0>=$s0&&$f1<$s1;$next=(float)$rows[$i+1]['open'];$slip=$next*$slippageBps/10000;
