@@ -38,6 +38,29 @@ jobs:
         run: npm run build
       - name: Package
         run: bash deployment/package.sh
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Browser end-to-end tests
+        env:
+          APP_ENV: test
+          STORAGE_DRIVER: json
+          AURUM_ADMIN_EMAILS: admin@example.test
+          AURUM_PRIVATE_PATH: ${{ github.workspace }}/dist/aurum-private
+          E2E_BASE_URL: http://127.0.0.1:8080/aurum/
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aurum-e2e/aurum
+          cp -R dist/aurum/public_html/. /tmp/aurum-e2e/aurum/
+          php -S 127.0.0.1:8080 -t /tmp/aurum-e2e >/tmp/aurum-php.log 2>&1 &
+          PHP_PID=$!
+          trap 'kill "$PHP_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS "$E2E_BASE_URL" >/dev/null; then break; fi
+            sleep .25
+          done
+          cd frontend
+          npm run test:e2e
       - uses: actions/upload-artifact@v4
         with:
           name: aurum-cloudways
