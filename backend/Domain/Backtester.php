@@ -5,7 +5,12 @@ final class Backtester {
     public static function confirmed(array $candles): array {
         $rows=array_values(array_filter($candles,static fn($c)=>($c['confirmed']??false)===true));
         $last=0;
-        foreach($rows as $r){if((int)$r['time']<=$last||!is_numeric($r['close'])||!is_numeric($r['open'])||(float)$r['open']<=0||(float)$r['close']<=0)throw new \InvalidArgumentException('Invalid candle history');$last=(int)$r['time'];}
+        foreach($rows as $r){
+            if((int)($r['time']??0)<=$last)throw new \InvalidArgumentException('Invalid candle history');
+            foreach(['open','high','low','close'] as $key)if(!is_numeric($r[$key]??null)||!is_finite((float)$r[$key])||(float)$r[$key]<=0)throw new \InvalidArgumentException('Invalid candle history');
+            if((float)$r['low']>min((float)$r['open'],(float)$r['close'])||(float)$r['high']<max((float)$r['open'],(float)$r['close']))throw new \InvalidArgumentException('Invalid candle range');
+            $last=(int)$r['time'];
+        }
         return $rows;
     }
     private static function ma(array $v,int $period,string $method): array {

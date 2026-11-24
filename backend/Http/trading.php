@@ -54,11 +54,11 @@ try{
     if(Demo::active()&&!in_array($action,['register','login'],true)){
         Demo::guardAccount();
         if($action==='list-accounts')aurum_send(['accounts'=>Demo::listing()]);
-        if(!in_array($action,['state','open','close','bulk-close','cancel-all-pending','pending','cancel-pending','modify-protection','modify-pending','break-even','basket-protection','create-alert','cancel-alert'],true))aurum_send(['error'=>'Action unavailable in demo mode'],403);
+        if(!in_array($action,['state','open','close','bulk-close','cancel-all-pending','pending','cancel-pending','modify-protection','modify-pending','break-even','basket-protection','create-alert','cancel-alert','basket-save','basket-delete'],true))aurum_send(['error'=>'Action unavailable in demo mode'],403);
         $q=null;
         if(aurum_config('APP_ENV','staging')==='test')$q=['bid'=>400000,'ask'=>400025,'ts'=>(int)(microtime(true)*1000),'newsStatus'=>'clear'];
         else{try{$q=aurum_market()->quote($store);}catch(Throwable $e){}}
-        if(in_array($action,['open','pending','modify-pending','modify-protection'],true)&&count($_SESSION['demo']['account']['requests'])>=300&&(!is_string($body['requestId']??null)||!array_key_exists($body['requestId'],$_SESSION['demo']['account']['requests'])))aurum_send(['error'=>'Demo trade limit reached; reset the demo to continue'],409);
+        if(in_array($action,['open','pending','modify-pending','modify-protection','basket-protection','create-alert','basket-save'],true)&&count($_SESSION['demo']['account']['requests'])>=300&&(!is_string($body['requestId']??null)||!array_key_exists($body['requestId'],$_SESSION['demo']['account']['requests'])))aurum_send(['error'=>'Demo trade limit reached; reset the demo to continue'],409);
         $result=TradeService::execute($_SESSION['demo'],$q,$action,$body);
         aurum_send($result+['authenticated'=>true,'role'=>'demo','demo'=>true,'demoEnabled'=>true,'csrf'=>$_SESSION['csrf'],'accountId'=>'primary'],$result['error']===null?200:409);
     }
@@ -70,7 +70,7 @@ try{
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'demo'=>false,'csrf'=>$_SESSION['csrf']]);
     }
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
-    if(!in_array($action,['state','open','close','bulk-close','cancel-all-pending','pending','cancel-pending','modify-protection','modify-pending','break-even','basket-protection','create-alert','cancel-alert','create-account','list-accounts','request-simulated-payout'],true))aurum_send(['error'=>'Unknown action'],400);
+    if(!in_array($action,['state','open','close','bulk-close','cancel-all-pending','pending','cancel-pending','modify-protection','modify-pending','break-even','basket-protection','create-alert','cancel-alert','basket-save','basket-delete','create-account','list-accounts','request-simulated-payout'],true))aurum_send(['error'=>'Unknown action'],400);
     $uid=(string)$_SESSION['uid'];$csrf=(string)$_SESSION['csrf'];session_write_close();
     $identity=Accounts::authorize($store,$uid,aurum_identity_policy());$role=aurum_identity_policy()->admin($identity)?'admin':'trader';
     $accountId=RequestContext::requestedId();

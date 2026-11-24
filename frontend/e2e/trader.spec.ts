@@ -10,7 +10,7 @@ async function mockPublicMarket(page:any){
       await route.fulfill({json:{data:{timestamp:Date.now(),bids:[{price:4000,contracts:10}],asks:[{price:4000.25,contracts:12}]}}});
     }else if(action==='candles'){
       const now=Math.floor(Date.now()/1000/60)*60;
-      const data=Array.from({length:60},(_,i)=>{const p=4000+i*.2;return {time:now-(59-i)*60,open:p,high:p+1,low:p-1,close:p+.2,confirmed:true}});
+      const data=Array.from({length:60},(_,i)=>{const p=4000+i*.2;return {time:now-(59-i)*60,open:p,high:p+1,low:p-1,close:p+.2,volume:10,confirmed:true}});
       await route.fulfill({json:{symbol:'XAUUSD',instrument:'XAU-USDT-SWAP',quoteCurrency:'USDT',proxy:true,data}});
     }else await route.fulfill({status:400,json:{error:'Unsupported test action'}});
   });
@@ -211,6 +211,7 @@ test('V4 mobile order sheet, risk sizing and price alerts',async({page})=>{
  await page.getByLabel('Alert price').fill('3999');
  await page.getByRole('button',{name:'Create price alert'}).click();
  await expect(page.locator('.alertRow')).toContainText('triggered');
+ await expect(page.getByRole('button',{name:'Triggered price alerts: 1'})).toBeVisible();
 });
 
 test('V4 chart indicators, secondary timeframe and workspace preferences',async({page})=>{
@@ -226,4 +227,21 @@ test('V4 chart indicators, secondary timeframe and workspace preferences',async(
  await expect(page.getByRole('button',{name:'BB',exact:true})).toHaveAttribute('aria-pressed','true');
  await expect(page.getByLabel('Secondary timeframe')).toHaveValue('1H');
  await expect(page.getByLabel('Oscillator indicator')).toHaveValue('RSI');
+});
+
+test('V4 basket persists after reload and PWA manifest is scoped to Aurum',async({page,request})=>{
+ await mockPublicMarket(page);await page.goto('./');
+ const manifest=await request.get('./manifest.webmanifest');expect(manifest.ok()).toBe(true);
+ const data=await manifest.json();expect(data.scope).toBe('./');expect(data.icons.some((i:any)=>i.sizes==='192x192')).toBe(true);
+ await page.getByRole('button',{name:'Try demo',exact:true}).click();
+ await page.getByRole('button',{name:'Buy market',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Open positions · 1'})).toBeVisible();
+ await page.getByLabel('Select visible positions').check();
+ page.once('dialog',d=>d.accept('My basket'));
+ await page.getByRole('button',{name:'Save basket',exact:true}).click();
+ await expect(page.getByLabel('Saved position basket').locator('option')).toHaveCount(2);
+ await page.reload();
+ await expect(page.getByLabel('Saved position basket').locator('option')).toHaveCount(2);
+ await page.getByLabel('Saved position basket').selectOption({label:'My basket · 1 open'});
+ await expect(page.getByRole('button',{name:'Close selected (1)',exact:true})).toBeEnabled();
 });

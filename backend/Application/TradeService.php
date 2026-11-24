@@ -13,7 +13,7 @@ final class TradeService {
             $key=$body['requestId']??'';
             if(!is_string($key)||!preg_match('/^[a-zA-Z0-9-]{16,80}$/D',$key))$error='Invalid request ID';
             elseif(array_key_exists($key,$a['requests']))$id=$a['requests'][$key];
-            elseif($q===null&&!in_array($action,['cancel-pending','cancel-all-pending','request-simulated-payout','create-alert','cancel-alert'],true))$error='Feed unavailable or stale; order blocked';
+            elseif($q===null&&!in_array($action,['cancel-pending','cancel-all-pending','request-simulated-payout','create-alert','cancel-alert','basket-save','basket-delete'],true))$error='Feed unavailable or stale; order blocked';
             else{
                 try{
                     if($action==='open')$id=Engine::open($a,$q,$body);
@@ -35,6 +35,8 @@ final class TradeService {
                         if($action==='break-even')TradingTools::breakEven($a,$q,$ids);else TradingTools::basket($a,$q,$ids,$body);
                         $id=$action;
                     }
+                    elseif($action==='basket-save')$id=TradingTools::saveBasket($a,$body);
+                    elseif($action==='basket-delete'){$id=(string)($body['id']??'');TradingTools::deleteBasket($a,$id);}
                     elseif($action==='create-alert')$id=TradingTools::alert($a,$body,$q);
                     elseif($action==='cancel-alert'){$id=(string)($body['id']??'');TradingTools::cancelAlert($a,$id);}
                     elseif($action==='modify-protection'){if(isset($body['snapshot'])&&(!is_string($body['snapshot'])||!hash_equals(Exposure::snapshot($a),$body['snapshot'])))throw new InvalidArgumentException('Position book changed; review again');$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
