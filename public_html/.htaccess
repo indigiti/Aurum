@@ -14,3 +14,13 @@ Options -Indexes
     Deny from all
   </IfModule>
 </FilesMatch>
+
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType image/svg+xml .svg
+</IfModule>
+<IfModule mod_headers.c>
+  <Files "sw.js">
+    Header always set Cache-Control "no-cache"
+  </Files>
+</IfModule>

@@ -5,7 +5,12 @@ final class Backtester {
     public static function confirmed(array $candles): array {
         $rows=array_values(array_filter($candles,static fn($c)=>($c['confirmed']??false)===true));
         $last=0;
-        foreach($rows as $r){if((int)$r['time']<=$last||!is_numeric($r['close'])||!is_numeric($r['open'])||(float)$r['open']<=0||(float)$r['close']<=0)throw new \InvalidArgumentException('Invalid candle history');$last=(int)$r['time'];}
+        foreach($rows as $r){
+            if((int)($r['time']??0)<=$last)throw new \InvalidArgumentException('Invalid candle history');
+            foreach(['open','high','low','close'] as $key)if(!is_numeric($r[$key]??null)||!is_finite((float)$r[$key])||(float)$r[$key]<=0)throw new \InvalidArgumentException('Invalid candle history');
+            if((float)$r['low']>min((float)$r['open'],(float)$r['close'])||(float)$r['high']<max((float)$r['open'],(float)$r['close']))throw new \InvalidArgumentException('Invalid candle range');
+            $last=(int)$r['time'];
+        }
         return $rows;
     }
     private static function ma(array $v,int $period,string $method): array {
@@ -16,8 +21,9 @@ final class Backtester {
         }
         return $out;
     }
-    public static function run(array $candles,int $fast,int $slow,int $units,float $spread,float $slippageBps,float $feePerLot,string $method='SMA',string $mode='long'): array {
+    public static function run(array $candles,int $fast,int $slow,int $units,float $spread,float $slippageBps,float $feePerLot,string $method='SMA',string $mode='long',float $stopDistance=0,float $targetDistance=0): array {
         if($fast<2||$fast>50||$slow<5||$slow>200||$fast>=$slow||$units<1||$units>1000||$spread<0||$spread>10||$slippageBps<0||$slippageBps>100||$feePerLot<0||$feePerLot>50||!in_array($method,['SMA','EMA'],true)||!in_array($mode,['long','short','both'],true))throw new \InvalidArgumentException('Backtest parameters outside limits');
+        if(!is_finite($stopDistance)||!is_finite($targetDistance)||$stopDistance<0||$targetDistance<0||$stopDistance>10000||$targetDistance>10000)throw new \InvalidArgumentException('Invalid strategy distances');
         $rows=self::confirmed($candles);
         if(count($rows)<$slow+3)throw new \InvalidArgumentException('Not enough confirmed candles for selected slow period');
         $closes=array_map(static fn($c)=>(float)$c['close'],$rows);$f=self::ma($closes,$fast,$method);$s=self::ma($closes,$slow,$method);
@@ -30,7 +36,17 @@ final class Backtester {
             $trades[]=['side'=>$position['direction']===1?'long':'short','entry'=>$position['entry'],'exit'=>$exit,'units'=>$units,'pnl'=>$pnl,'openedAt'=>$position['time'],'closedAt'=>$time,'reason'=>$reason];
             if($pnl>0){$wins++;$grossWin+=$pnl;}elseif($pnl<0){$losses++;$grossLoss+=abs($pnl);}$position=null;
         };
-        for($i=$slow;$i<count($rows)-1;$i++){
+        for($i=$slow;$i<count($rows);$i++){
+            if($position!==null&&($stopDistance>0||$targetDistance>0)){
+                $dir=$position['direction'];$entry=$position['entry'];$stop=$entry-$dir*$stopDistance;$target=$entry+$dir*$targetDistance;
+                $row=$rows[$i];$open=(float)$row['open'];$low=(float)$row['low'];$high=(float)$row['high'];
+                $hitStop=$stopDistance>0&&($dir===1?$low<=$stop:$high>=$stop);
+                $hitTarget=$targetDistance>0&&($dir===1?$high>=$target:$low<=$target);
+                // OHLC cannot establish intrabar sequence; assume stop first and adverse gap fills.
+                if($hitStop)$close($dir===1?min($open,$stop):max($open,$stop),(int)$row['time'],'stop-distance');
+                elseif($hitTarget)$close($target,(int)$row['time'],'target-distance');
+            }
+            if($i===count($rows)-1)break;
             $up=$f[$i-1]<=$s[$i-1]&&$f[$i]>$s[$i];$down=$f[$i-1]>=$s[$i-1]&&$f[$i]<$s[$i];
             if(!$up&&!$down)continue;
             $direction=$up?1:-1;$next=(float)$rows[$i+1]['open'];$time=(int)$rows[$i+1]['time'];
@@ -41,7 +57,7 @@ final class Backtester {
         $count=count($trades);
         return ['strategy'=>$method.' crossover '.$mode,'fast'=>$fast,'slow'=>$slow,'units'=>$units,'barCount'=>count($rows),
             'firstTimestamp'=>(int)$rows[0]['time'],'lastTimestamp'=>(int)$rows[array_key_last($rows)]['time'],
-            'spreadAssumption'=>$spread,'slippageBps'=>$slippageBps,'roundTripFeePerLot'=>$feePerLot,'trades'=>$count,'wins'=>$wins,'losses'=>$losses,'breakeven'=>$count-$wins-$losses,
+            'stopDistance'=>$stopDistance,'targetDistance'=>$targetDistance,'spreadAssumption'=>$spread,'slippageBps'=>$slippageBps,'roundTripFeePerLot'=>$feePerLot,'trades'=>$count,'wins'=>$wins,'losses'=>$losses,'breakeven'=>$count-$wins-$losses,
             'winRatePct'=>$count?$wins/$count*100:0,'netPnl'=>$equity,'grossProfit'=>$grossWin,'grossLoss'=>$grossLoss,
             'profitFactor'=>$grossLoss?$grossWin/$grossLoss:null,'maxClosedTradeDrawdown'=>$maxDd,'tradeList'=>array_slice($trades,-100)];
     }

@@ -11,6 +11,7 @@ require_once __DIR__.'/../backend/SimulatedPayout.php';
 require_once __DIR__.'/../backend/Backtester.php';
 require_once __DIR__.'/../backend/AiReview.php';
 require_once __DIR__.'/../backend/Domain/Exposure.php';
+require_once __DIR__.'/../backend/Domain/TradingTools.php';
 require_once __DIR__.'/../backend/Application/TradeService.php';
 function ck(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 $user=[];$code=\Aurum\Identity::issue($user,1000);
@@ -63,3 +64,23 @@ $r2=\Aurum\TradeService::execute($state,$q,'bulk-close',$body);ck($r2['error']==
 $snap=\Aurum\Exposure::snapshot($state['account']);$r=\Aurum\TradeService::execute($state,$q,'bulk-close',['mode'=>'flatten','snapshot'=>$snap,'requestId'=>'flatten-test-12345678']);
 ck($r['error']===null&&!$state['account']['positions']&&!$state['account']['pending'],'Flatten closes positions and cancels pending');
 echo "Exposure, matched closing, stale snapshot and flatten tests passed\n";
+
+require_once __DIR__.'/../backend/Domain/TradingTools.php';
+$toolsBook=\Aurum\Engine::account(100000);$q=['bid'=>400000,'ask'=>400025,'ts'=>(int)(microtime(true)*1000)];
+\Aurum\Engine::mark($toolsBook,$q);$pid=\Aurum\Engine::open($toolsBook,$q,['side'=>'buy','units'=>3]);$q['bid']+=100;$q['ask']+=100;
+\Aurum\TradingTools::breakEven($toolsBook,$q,[$pid]);ck($toolsBook['positions'][$pid]['sl']===400025,'Break even at entry');
+\Aurum\TradingTools::basket($toolsBook,$q,[$pid],['tp'=>4010]);ck($toolsBook['positions'][$pid]['tp']===401000,'Basket target');
+$alert=\Aurum\TradingTools::alert($toolsBook,['direction'=>'above','price'=>4001],$q);\Aurum\TradingTools::observeAlerts($toolsBook,$q);ck($toolsBook['alerts'][$alert]['status']==='triggered','Alert observes executable bid');
+echo "Trading tools tests passed\n";
+
+$bid=\Aurum\TradingTools::saveBasket($toolsBook,['name'=>'Test basket','ids'=>[$pid],'snapshot'=>\Aurum\Exposure::snapshot($toolsBook)]);
+ck($toolsBook['baskets'][$bid]['ids']===[$pid],'Saved basket retains selected positions');\Aurum\TradingTools::deleteBasket($toolsBook,$bid);ck(empty($toolsBook['baskets']),'Deleting basket preserves positions');ck(isset($toolsBook['positions'][$pid]),'Basket delete does not close trade');
+$wide=array_map(static function($r){$r['high']+=100;$r['low']-=100;return $r;},$rows);
+$stops=\Aurum\Backtester::run($wide,5,15,1,0,0,0,'SMA','both',1,1);
+ck($stops['trades']>0&&count(array_filter($stops['tradeList'],static fn($r)=>$r['reason']==='stop-distance'))>0&&!in_array('target-distance',array_column($stops['tradeList'],'reason'),true),'Ambiguous intrabar stop first');
+$dir2=sys_get_temp_dir().'/aurum-alert-'.bin2hex(random_bytes(8));$workerStore=new \Aurum\JsonStorage($dir2);
+$workerStore->transaction('user-alert',static function(array &$s)use($q){$s['account']=\Aurum\Engine::account(5000);$s['account']['status']='failed';\Aurum\TradingTools::alert($s['account'],['direction'=>'above','price'=>3999],$q);});
+$q['ts']++;$sweep=\Aurum\RiskRunner::sweep($workerStore,$q);
+ck($sweep['errors']===0&&$workerStore->transaction('user-alert',static fn(array &$s)=>array_values($s['account']['alerts'])[0]['status'])==='triggered','Worker observes registered alerts independently of browser and challenge state');
+foreach(glob($dir2.'/*')?:[] as $f)unlink($f);rmdir($dir2);
+echo "Saved baskets, strategy protection and unattended alert tests passed\n";
