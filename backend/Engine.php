@@ -109,8 +109,8 @@ final class Engine {
         $a['equity']=$a['balance'];foreach($a['positions'] as $p)$a['equity']+=self::pnl($p,$q);
         $event=null;
         $rules=$a['rules']??Challenges::defaults();
-        if($a['status']==='active'&&$a['equity']<=$a['initial']*(1-$rules['maxLossPct']/100))$event='maximum-drawdown';
-        elseif($a['status']==='active'&&$a['equity']<=$a['dayBase']-$a['initial']*$rules['dailyLossPct']/100)$event='daily-loss';
+        if(in_array($a['status'],['active','locked'],true)&&$a['equity']<=$a['initial']*(1-$rules['maxLossPct']/100))$event='maximum-drawdown';
+        elseif(in_array($a['status'],['active','locked'],true)&&$a['equity']<=$a['dayBase']-$a['initial']*$rules['dailyLossPct']/100)$event='daily-loss';
         if($event!==null){
             foreach(array_keys($a['positions']) as $id)self::close($a,$id,$q,'risk-breach');
             $a['pending']=[];$a['equity']=$a['balance'];$a['status']='failed';
