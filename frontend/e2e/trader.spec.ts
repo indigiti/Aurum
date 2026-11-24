@@ -15,6 +15,7 @@ async function mockPublicMarket(page:any){
 }
 async function register(page:any,email:string){
   await page.goto('./');
+  await page.getByRole('button',{name:'Start challenge',exact:true}).click();
   await page.getByLabel('Email',{exact:true}).fill(email);
   await page.getByLabel('Password (10+ characters)').fill('Aurum-E2E-Password-2026');
   await page.getByLabel('Virtual account').selectOption('5000');
@@ -56,4 +57,28 @@ test('allowlisted administrator can inspect health and update challenge rules',a
   await page.getByLabel('Maximum loss %').fill('8');
   await page.getByRole('button',{name:'Save rules for new accounts'}).click();
   await expect(page.getByText('Admin action completed')).toBeVisible();
+});
+
+test('guest navigation never repeats the authentication form',async({page})=>{
+  await mockPublicMarket(page);
+  await page.goto('./');
+  await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
+  for(const tab of ['Replay','Calendar','Journal','Analytics','Account']){
+    await page.getByRole('button',{name:tab,exact:true}).click();
+    await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
+  }
+  await page.getByRole('button',{name:'Sign in to continue'}).click();
+  await expect(page.getByRole('heading',{name:'Welcome back'})).toBeVisible();
+  await expect(page.getByLabel('Email',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Virtual account',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('Email verification code')).toHaveCount(0);
+  await page.getByRole('button',{name:'Register',exact:true}).click();
+  await expect(page.getByLabel('Virtual account',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Back to workspace'}).click();
+  await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('heading',{name:'Account',exact:true})).toBeVisible();
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'Menu'}).click();
+  await page.getByRole('button',{name:'Terminal',exact:true}).click();
+  await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
 });
