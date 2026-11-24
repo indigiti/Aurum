@@ -15,6 +15,7 @@ if($_SERVER['REQUEST_METHOD']!=='GET'){http_response_code(405);header('Allow: GE
 try{
     $feed=new OkxFeed();$action=$_GET['action']??'ticker';
     if($action==='ticker')$data=$feed->ticker();
+    elseif($action==='instrument')$data=$feed->instrument();
     elseif($action==='candles'){
         $bar=$_GET['bar']??'1m';$limit=filter_var($_GET['limit']??100,FILTER_VALIDATE_INT);
         if(!is_string($bar)||$limit===false)throw new InvalidArgumentException();
