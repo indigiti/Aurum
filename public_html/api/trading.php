@@ -34,12 +34,12 @@ try{
     if(in_array($action,['register','login'],true)){
         $email=strtolower(trim((string)($body['email']??'')));$password=$body['password']??'';
         if(!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($email)>254||!is_string($password)||strlen($password)<10||strlen($password)>72)aurum_send(['error'=>'Valid email and 10–72 byte password required'],400);
-        $uid=hash('sha256',$email);$isAdmin=in_array($email,aurum_admin_emails(),true);
-        $store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$isAdmin){
+        $uid=hash('sha256',$email);$isAdmin=in_array($email,aurum_admin_emails(),true);$rules=Challenges::current($store);
+        $store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$isAdmin,$rules){
             if($action==='register'){
                 if(is_array($s['user']??null))throw new InvalidArgumentException('Unable to register');
                 $s['user']=['email'=>$email,'hash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>$isAdmin?'admin':'trader','createdAt'=>time()];
-                $s['account']=Engine::account((int)($body['size']??100000));
+                $s['account']=Engine::account((int)($body['size']??100000),$rules);
             }elseif(!is_array($s['user']??null)||!password_verify($password,(string)($s['user']['hash']??'')))throw new InvalidArgumentException('Invalid credentials');
             if($isAdmin)$s['user']['role']='admin';
         });
