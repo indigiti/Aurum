@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__.'/../backend/Storage.php';
+require_once __DIR__.'/../backend/bootstrap.php';
 require_once __DIR__.'/../backend/Challenges.php';
 require_once __DIR__.'/../backend/Engine.php';
 use Aurum\MariaDbStorage;
@@ -21,7 +21,7 @@ $all=$store->all('user-');verify(isset($all[$scope]),'MariaDB scope enumeration'
 try{$store->transaction('rollback-test',static function(array &$s){$s['value']=1;throw new RuntimeException('rollback');});}catch(RuntimeException $e){}
 $count=(int)$pdo->query("SELECT COUNT(*) FROM aurum_state_v2 WHERE scope='rollback-test'")->fetchColumn();
 verify($count===0,'MariaDB transaction rollback');
-$rules=Challenges::current($store);verify($rules['phaseTargets']===[8.0,5.0],'MariaDB challenge configuration');
+$rules=\Aurum\ChallengeSettings::current($store);verify($rules['phaseTargets']===[8.0,5.0],'MariaDB challenge configuration');
 $tmp=sys_get_temp_dir().'/aurum-migration-'.bin2hex(random_bytes(8));
 $dir=$tmp.'/private-storage';mkdir($dir,0700,true);
 $migrationUid=hash('sha256','migration@example.test');
