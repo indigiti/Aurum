@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/Storage.php';
 require_once __DIR__.'/Engine.php';
+require_once __DIR__.'/Challenges.php';
 require_once __DIR__.'/MarketData/OkxFeed.php';
 function aurum_private_root(): string {
     $root=getenv('AURUM_PRIVATE_PATH')?:dirname(__DIR__);
