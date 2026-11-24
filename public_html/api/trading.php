@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 use Aurum\Engine;
+use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 $private=getenv('AURUM_PRIVATE_PATH');
 if(!$private){$candidate=dirname(__DIR__,2);$private=is_file($candidate.'/backend/bootstrap.php')?$candidate:dirname(__DIR__,3).'/aurum-private';}
