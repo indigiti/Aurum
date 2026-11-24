@@ -1,0 +1,113 @@
+name: Aurum Quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: aurum-ci
+          MARIADB_DATABASE: aurum_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, pdo_mysql
+      - name: PHP lint
+        run: find backend public_html tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Engine tests
+        run: php tests/engine.php
+      - name: PHP API smoke tests
+        run: bash tests/api-smoke.sh
+      - name: MariaDB adapter and migration tests
+        env:
+          DB_DSN: mysql:host=127.0.0.1;port=3306;dbname=aurum_test;charset=utf8mb4
+          DB_USER: root
+          DB_PASSWORD: aurum-ci
+        run: php tests/mariadb-smoke.php
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Type check
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Static export
+        working-directory: frontend
+        env:
+          AURUM_BASE_PATH: /aurum
+        run: npm run build
+      - name: Package
+        run: bash deployment/package.sh
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install chromium
+      - name: Browser end-to-end tests
+        env:
+          APP_ENV: test
+          STORAGE_DRIVER: json
+          AURUM_ADMIN_EMAILS: admin@example.test
+          E2E_BASE_URL: http://127.0.0.1:8080/aurum/
+        run: |
+          set -euo pipefail
+          unset AURUM_PRIVATE_PATH
+          mkdir -p /tmp/aurum-e2e/public_html/aurum /tmp/aurum-e2e/private_html/aurum
+          cp -R release/public/. /tmp/aurum-e2e/public_html/aurum/
+          cp -R release/private/. /tmp/aurum-e2e/private_html/aurum/
+          php -S 127.0.0.1:8080 -t /tmp/aurum-e2e/public_html >/tmp/aurum-php.log 2>&1 &
+          PHP_PID=$!
+          trap 'kill "$PHP_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 40); do
+            if curl -fsS "$E2E_BASE_URL" >/dev/null; then break; fi
+            sleep .25
+          done
+          curl -fsS "${E2E_BASE_URL}api/health.php" | php -r '$d=json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR); if($d["status"]!=="ok" || $d["sourceSha"]!==getenv("GITHUB_SHA"))exit(1);'
+          curl -fsS "${E2E_BASE_URL}api/trading.php" | php -r '$d=json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR); if($d["authenticated"]!==false || empty($d["csrf"]))exit(1);'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "${E2E_BASE_URL}backend/bootstrap.php")" = 404
+          cd frontend
+          npm run test:e2e
+      - name: Upload DigiOps release
+        uses: actions/upload-artifact@v4
+        with:
+          name: digiops-release
+          path: release/
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurum-cloudways
+          path: |
+            dist/aurum-cloudways.zip
+            dist/aurum-cloudways.zip.sha256
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aurum-cloudways
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" aurum-cloudways.zip aurum-cloudways.zip.sha256 --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes

@@ -1,0 +1,43 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../backend/Storage.php';
+require_once __DIR__.'/../backend/Challenges.php';
+require_once __DIR__.'/../backend/Engine.php';
+use Aurum\MariaDbStorage;
+use Aurum\Challenges;
+use Aurum\Engine;
+function verify(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
+$dsn=getenv('DB_DSN')?:'mysql:host=127.0.0.1;port=3306;dbname=aurum_test;charset=utf8mb4';
+$pdo=new PDO($dsn,getenv('DB_USER')?:'root',getenv('DB_PASSWORD')?:'aurum-ci',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
+$pdo->exec(file_get_contents(__DIR__.'/../database/schema.sql'));
+$pdo->exec('TRUNCATE TABLE aurum_state_v2');
+$store=new MariaDbStorage($pdo);
+$scope='user-'.str_repeat('a',64);
+$store->transaction($scope,function(array &$s){$s['user']=['email'=>'maria@example.test','hash'=>'hash'];$s['account']=Engine::account(5000);});
+$email=$store->transaction($scope,static fn(array &$s)=>$s['user']['email']);
+verify($email==='maria@example.test','MariaDB transactional persistence');
+$all=$store->all('user-');verify(isset($all[$scope]),'MariaDB scope enumeration');
+try{$store->transaction('rollback-test',static function(array &$s){$s['value']=1;throw new RuntimeException('rollback');});}catch(RuntimeException $e){}
+$count=(int)$pdo->query("SELECT COUNT(*) FROM aurum_state_v2 WHERE scope='rollback-test'")->fetchColumn();
+verify($count===0,'MariaDB transaction rollback');
+$rules=Challenges::current($store);verify($rules['phaseTargets']===[8.0,5.0],'MariaDB challenge configuration');
+$tmp=sys_get_temp_dir().'/aurum-migration-'.bin2hex(random_bytes(8));
+$dir=$tmp.'/private-storage';mkdir($dir,0700,true);
+$migrationUid=hash('sha256','migration@example.test');
+$account=Engine::account(10000);
+file_put_contents($dir.'/user-'.$migrationUid.'.json',json_encode(['user'=>['email'=>'migration@example.test','hash'=>'hash'],'account'=>$account],JSON_THROW_ON_ERROR));
+file_put_contents($dir.'/config-challenges.json',json_encode(['user'=>null,'account'=>null,'rules'=>Challenges::defaults()],JSON_THROW_ON_ERROR));
+putenv('AURUM_PRIVATE_PATH='.$tmp);
+$command=escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/../backend/migrate-json-to-mariadb.php');
+exec($command.' 2>&1',$output,$status);
+verify($status===0,'JSON-to-MariaDB migration: '.implode("\n",$output));
+$migrated=$store->transaction('user-'.$migrationUid,static fn(array &$s)=>$s['user']['email']);
+verify($migrated==='migration@example.test','Migrated user state');
+verify(is_dir($dir.'/backups'),'Migration source backup');
+$output=[];exec($command.' 2>&1',$output,$status);
+verify($status===0,'Idempotent migration: '.implode("\n",$output));
+foreach(glob($dir.'/backups/*')?:[] as $p)unlink($p);
+rmdir($dir.'/backups');
+foreach(glob($dir.'/*')?:[] as $p)unlink($p);
+rmdir($dir);rmdir($tmp);
+echo "MariaDB adapter, transaction rollback, challenge config and JSON migration tests passed\n";
