@@ -31,6 +31,8 @@ jobs:
           extensions: curl, pdo_mysql
       - name: PHP lint
         run: find backend public_html tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Architecture boundaries
+        run: php tests/architecture.php
       - name: Engine tests
         run: |
           php tests/engine.php
