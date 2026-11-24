@@ -53,27 +53,29 @@ try{
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'csrf'=>$_SESSION['csrf']]);
     }
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
-    if(!in_array($action,['state','open','close','pending','cancel-pending'],true))aurum_send(['error'=>'Unknown action'],400);
+    if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending'],true))aurum_send(['error'=>'Unknown action'],400);
     $uid=(string)$_SESSION['uid'];$role=(string)($_SESSION['role']??'trader');$csrf=(string)$_SESSION['csrf'];session_write_close();
     $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}}
     $result=$store->transaction(aurum_scope($uid),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
-        $a=&$s['account'];$error=null;$id=null;
+        $a=&$s['account'];Engine::ensureLedger($a);$error=null;$id=null;
         if($q!==null){try{Engine::mark($a,$q);}catch(RuntimeException $e){$q=null;}}
         if($action!=='state'){
             $key=$body['requestId']??'';
             if(!is_string($key)||!preg_match('/^[a-zA-Z0-9-]{16,80}$/D',$key))$error='Invalid request ID';
             elseif(array_key_exists($key,$a['requests']))$id=$a['requests'][$key];
-            elseif($q===null)$error='Feed unavailable or stale; order blocked';
+            elseif($q===null&&$action!=='cancel-pending')$error='Feed unavailable or stale; order blocked';
             else{
                 try{
                     if($action==='open')$id=Engine::open($a,$q,$body);
-                    elseif($action==='close'){ $id=(string)($body['id']??'');Engine::close($a,$id,$q); }
+                    elseif($action==='close'){ $id=(string)($body['id']??'');$units=array_key_exists('units',$body)?filter_var($body['units'],FILTER_VALIDATE_INT):null;if($units===false)throw new InvalidArgumentException('Invalid closing size');Engine::close($a,$id,$q,'manual',$units); }
+                    elseif($action==='modify-protection'){$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
+                    elseif($action==='modify-pending'){$id=Engine::modifyPending($a,(string)($body['id']??''),$q,$body);}
                     elseif($action==='pending')$id=Engine::placePending($a,$q,$body);
                     else{$id=(string)($body['id']??'');Engine::cancelPending($a,$id);}
                     $a['requests'][$key]=$id;
                     if(count($a['requests'])>500)$a['requests']=array_slice($a['requests'],-400,null,true);
-                    Engine::mark($a,$q);
+                    if($q!==null)Engine::mark($a,$q);
                 }catch(InvalidArgumentException $e){$error=$e->getMessage();}
             }
         }

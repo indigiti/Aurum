@@ -43,7 +43,10 @@ try{
         if($action==='lock'&&$a['status']==='active'){$a['status']='locked';$a['pending']=[];}
         elseif($action==='unlock'&&$a['status']==='locked')$a['status']='active';
         elseif($action==='reset'){
-            $dollars=(int)($a['initial']/100);$rules=$a['rules']??Challenges::defaults();$a=Engine::account($dollars,$rules);
+            if($a['positions']||$a['pending'])throw new InvalidArgumentException('Close positions and cancel pending orders before reset');
+            Engine::ensureLedger($a);Engine::book($a,$a['initial']-$a['balance'],'admin-capital-reset',(int)(microtime(true)*1000));
+            $old=$a;$dollars=(int)($a['initial']/100);$rules=$a['rules']??Challenges::defaults();$a=Engine::account($dollars,$rules);
+            foreach(['ledger','journal','riskEvents','phaseHistory','requests'] as $key)$a[$key]=$old[$key]??[];
         }else throw new InvalidArgumentException('Action not permitted for current status');
         $a['riskEvents'][]=['type'=>'admin-'.$action,'admin'=>$email,'previousStatus'=>$before,'timestamp'=>(int)(microtime(true)*1000)];
         return ['status'=>$a['status']];
