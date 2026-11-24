@@ -10,12 +10,13 @@ function verify(bool $ok,string $message):void{if(!$ok)throw new RuntimeExceptio
 $dsn=getenv('DB_DSN')?:'mysql:host=127.0.0.1;port=3306;dbname=aurum_test;charset=utf8mb4';
 $pdo=new PDO($dsn,getenv('DB_USER')?:'root',getenv('DB_PASSWORD')?:'aurum-ci',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 $pdo->exec(file_get_contents(__DIR__.'/../database/schema.sql'));
-$pdo->exec('TRUNCATE TABLE aurum_state_v2');
+foreach(['aurum_state_v2','aurum_accounts','aurum_ledger','aurum_fills','aurum_open_positions','aurum_pending_orders'] as $table)$pdo->exec('TRUNCATE TABLE '.$table);
 $store=new MariaDbStorage($pdo);
 $scope='user-'.str_repeat('a',64);
 $store->transaction($scope,function(array &$s){$s['user']=['email'=>'maria@example.test','hash'=>'hash'];$s['account']=Engine::account(5000);});
 $email=$store->transaction($scope,static fn(array &$s)=>$s['user']['email']);
 verify($email==='maria@example.test','MariaDB transactional persistence');
+verify((int)$pdo->query('SELECT SUM(delta_cents) FROM aurum_ledger')->fetchColumn()===500000,'Relational ledger projection');
 $all=$store->all('user-');verify(isset($all[$scope]),'MariaDB scope enumeration');
 try{$store->transaction('rollback-test',static function(array &$s){$s['value']=1;throw new RuntimeException('rollback');});}catch(RuntimeException $e){}
 $count=(int)$pdo->query("SELECT COUNT(*) FROM aurum_state_v2 WHERE scope='rollback-test'")->fetchColumn();

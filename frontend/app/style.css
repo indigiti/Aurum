@@ -8,3 +8,10 @@
 @media(max-width:650px){.shell{display:block}.sidebar{display:none}.sidebar.open{display:flex;position:fixed;z-index:20;width:215px;top:58px;height:calc(100vh - 58px);box-shadow:15px 0 40px #0008}.menu{display:inline-flex;margin-right:8px;padding:6px}main{padding:12px}.eyebrow{font-size:9px}h1{font-size:24px}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stats section{padding:11px}.headerRight button{font-size:11px}.charthead{gap:5px}.timeframes{width:100%}.timeframes button{padding:5px}.notice{font-size:11px}.ticket{display:flex}.formgrid{grid-template-columns:1fr}.adminActions{flex-wrap:wrap}.auth{padding:14px}}
 
 .equityChart{display:block;width:100%;height:auto;max-height:220px;background:#0d1420;border:1px solid var(--line);border-radius:9px;margin:8px 0}.curveLegend{display:flex;gap:18px;color:var(--muted);font-size:11px;margin:7px 0 14px}.curveLegend span:first-child{color:var(--gold)}
+
+.calendarDay{padding:12px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:6px}.headerRight select{width:auto;max-width:170px}textarea{width:100%;padding:12px;background:#0b111b;color:#e7edf5;border:1px solid var(--line);border-radius:7px;font:inherit}input[type=checkbox]{width:auto}
+
+.certificate{border:1px solid var(--gold);padding:24px;margin:16px 0;border-radius:12px}.certificate button{display:block;margin-top:12px}@media print{body *{visibility:hidden}.certificate,.certificate *{visibility:visible;color:#111}.certificate{position:absolute;inset:0;border:2px solid #555;background:white}.certificate button{display:none}}
+
+/* The expanded V2 navigation must scroll on short desktop and mobile viewports. */
+.sidebar{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;min-height:0;scrollbar-width:thin;height:100dvh}.sidebar>*{flex-shrink:0}.sidebar button{min-height:40px}.sidebarFoot{padding-top:12px}@media(max-width:650px){.sidebar.open{height:calc(100dvh - 58px);bottom:0}}

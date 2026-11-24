@@ -49,8 +49,22 @@ final class MariaDbStorage implements Storage {
             $raw=$stmt->fetchColumn();if(!is_string($raw))throw new \RuntimeException('Database state unavailable');
             $s=json_decode($raw,true,512,JSON_THROW_ON_ERROR);$result=$fn($s);
             $this->db->prepare('UPDATE aurum_state_v2 SET payload=?,updated_at=CURRENT_TIMESTAMP WHERE scope=?')->execute([json_encode($s,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES),$scope]);
+            if(is_array($s['account']??null)&&str_starts_with($scope,'user-'))$this->syncFinancialRows($scope,$s['account']);
             $this->db->commit();return $result;
         }catch(\Throwable $e){if($this->db->inTransaction())$this->db->rollBack();throw $e;}
+    }
+    private function syncFinancialRows(string $scope,array $a): void {
+        $this->db->prepare('INSERT INTO aurum_accounts(scope,initial_cents,balance_cents,equity_cents,phase,status) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE initial_cents=VALUES(initial_cents),balance_cents=VALUES(balance_cents),equity_cents=VALUES(equity_cents),phase=VALUES(phase),status=VALUES(status)')->execute([$scope,$a['initial'],$a['balance'],$a['equity'],$a['phase'],$a['status']]);
+        $ledger=$this->db->prepare('INSERT INTO aurum_ledger(scope,event_id,event_type,delta_cents,balance_cents,phase,event_ms,reference_id) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)');
+        foreach($a['ledger']??[] as $l)$ledger->execute([$scope,$l['id'],$l['type'],$l['delta'],$l['balance'],$l['phase'],$l['timestamp'],$l['reference']??null]);
+        $fills=$this->db->prepare('INSERT INTO aurum_fills(scope,fill_id,position_id,side,units,entry_cents,exit_cents,pnl_cents,closed_ms,reason) VALUES (?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE fill_id=VALUES(fill_id)');
+        foreach($a['journal']??[] as $i=>$f)$fills->execute([$scope,$f['fillId']??hash('sha256',json_encode([$i,$f],JSON_THROW_ON_ERROR)),$f['id'],$f['side'],$f['units'],$f['entry'],$f['exit'],$f['pnl'],$f['closedAt'],$f['reason']]);
+        $this->db->prepare('DELETE FROM aurum_open_positions WHERE scope=?')->execute([$scope]);
+        $pos=$this->db->prepare('INSERT INTO aurum_open_positions(scope,position_id,side,units,entry_cents,sl_cents,tp_cents,opened_ms) VALUES (?,?,?,?,?,?,?,?)');
+        foreach($a['positions']??[] as $p)$pos->execute([$scope,$p['id'],$p['side'],$p['units'],$p['entry'],$p['sl'],$p['tp'],$p['openedAt']]);
+        $this->db->prepare('DELETE FROM aurum_pending_orders WHERE scope=?')->execute([$scope]);
+        $pending=$this->db->prepare('INSERT INTO aurum_pending_orders(scope,order_id,order_type,units,trigger_cents,sl_cents,tp_cents,created_ms) VALUES (?,?,?,?,?,?,?,?)');
+        foreach($a['pending']??[] as $p)$pending->execute([$scope,$p['id'],$p['type'],$p['units'],$p['price'],$p['sl']===null||$p['sl']===''?null:(int)round($p['sl']*100),$p['tp']===null||$p['tp']===''?null:(int)round($p['tp']*100),$p['createdAt']]);
     }
     public function all(string $prefix='user-'): array {
         $stmt=$this->db->prepare('SELECT scope,payload FROM aurum_state_v2 WHERE scope LIKE ?');$stmt->execute([$prefix.'%']);$out=[];

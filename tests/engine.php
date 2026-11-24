@@ -36,6 +36,10 @@ $failed=false;try{Engine::quote(['bid'=>1,'ask'=>2,'timestamp'=>1,'stale'=>false
 $summary=Analytics::summarize($a);check($summary['closedTrades']===2&&$summary['wins']===1,'Analytics');
 $candles=[];for($i=0;$i<80;$i++){$v=4000+sin($i/5)*20+$i*.2;$candles[]=['time'=>1700000000+$i*60,'open'=>$v,'high'=>$v+2,'low'=>$v-2,'close'=>$v,'confirmed'=>true];}
 $bt=Backtester::run($candles,5,12,10,.3,1,0);check($bt['barCount']===80&&isset($bt['netPnl']),'Backtest');
+$partial=Engine::account(100000);Engine::mark($partial,$q);$id=Engine::open($partial,$q,['side'=>'buy','units'=>10]);Engine::modifyProtection($partial,$id,$q,['sl'=>4000,'tp'=>4200]);Engine::close($partial,$id,$q,'manual',4);Engine::mark($partial,$q);
+check($partial['positions'][$id]['units']===6,'Partial close');
+check(array_sum(array_column($partial['ledger'],'delta'))===$partial['balance'],'Ledger reconciliation');
+$pendingId=Engine::placePending($partial,$q,['type'=>'buy-limit','price'=>4000,'units'=>1]);$replacement=Engine::modifyPending($partial,$pendingId,$q,['price'=>3999]);check(!isset($partial['pending'][$pendingId])&&isset($partial['pending'][$replacement]),'Replace pending order');
 $dir=sys_get_temp_dir().'/aurum-test-'.bin2hex(random_bytes(8));$store=new Aurum\JsonStorage($dir);
 $store->transaction('user-test',function(array &$s){$s['x']=42;});
 check($store->transaction('user-test',fn(array &$s)=>$s['x'])===42,'Scoped persistence');

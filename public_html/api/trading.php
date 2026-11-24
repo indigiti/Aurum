@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 use Aurum\Engine;
+use Aurum\Identity;
+use Aurum\Accounts;
+use Aurum\NewsCalendar;
+use Aurum\SimulatedPayout;
 use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
@@ -39,47 +43,79 @@ try{
         $rateScope='rate-'.hash('sha256',$email);
         $allowed=$store->transaction($rateScope,function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=10){$s['attempts']=$attempts;return false;}$attempts[]=$now;$s['attempts']=$attempts;return true;});
         if(!$allowed)aurum_send(['error'=>'Too many authentication attempts. Try again in 15 minutes.'],429);
-        $uid=hash('sha256',$email);$isAdmin=in_array($email,aurum_admin_emails(),true);$rules=Challenges::current($store);
-        $store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$isAdmin,$rules){
+        $uid=hash('sha256',$email);$rules=Challenges::current($store);
+        $ipScope='rate-ip-'.hash('sha256',(string)($_SERVER['REMOTE_ADDR']??'unknown'));
+        $allowedIp=$store->transaction($ipScope,static function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=60)return false;$attempts[]=$now;$s['attempts']=$attempts;return true;});
+        if(!$allowedIp)aurum_send(['error'=>'Too many requests'],429);
+        $identity=$store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$rules){
             if($action==='register'){
                 if(is_array($s['user']??null))throw new InvalidArgumentException('Unable to register');
-                $s['user']=['email'=>$email,'hash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>$isAdmin?'admin':'trader','createdAt'=>time()];
+                $s['user']=['email'=>$email,'hash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>'trader','createdAt'=>time()];
                 $s['account']=Engine::account((int)($body['size']??100000),$rules);
             }elseif(!is_array($s['user']??null)||!password_verify($password,(string)($s['user']['hash']??'')))throw new InvalidArgumentException('Invalid credentials');
-            if($isAdmin)$s['user']['role']='admin';
+            $user=&$s['user'];
+            if(Identity::requiresVerification($email)&&!Identity::verified($user)){
+                $code=$body['verificationCode']??'';
+                if(!is_string($code))throw new InvalidArgumentException('Invalid code');
+                if($code!==''){
+                    if(!Identity::verify($user,trim($code),time()))throw new InvalidArgumentException('Invalid verification code');
+                }else{
+                    if(($user['verificationExpires']??0)>time()+840)return ['verify'=>true,'code'=>null];
+                    return ['verify'=>true,'code'=>Identity::issue($user,time())];
+                }
+            }
+            $user['role']=Identity::admin($user)?'admin':'trader';
+            if(password_needs_rehash($user['hash'],PASSWORD_DEFAULT))$user['hash']=password_hash($password,PASSWORD_DEFAULT);
+            return ['verify'=>false,'role'=>$user['role']];
         });
+        if($identity['verify']){
+            $sent=$identity['code']===null?null:Identity::send($email,$identity['code']);
+            aurum_send(['authenticated'=>false,'verificationRequired'=>true,'csrf'=>$_SESSION['csrf'],'message'=>$sent===false?'Email delivery is unavailable. Contact the administrator.':'Enter the verification code sent to your email; use Sign in after entering it.']);
+        }
+        $isAdmin=$identity['role']==='admin';
         $store->transaction($rateScope,static function(array &$s){$s['attempts']=[];});
         session_regenerate_id(true);$_SESSION['uid']=$uid;$_SESSION['role']=$isAdmin?'admin':'trader';$_SESSION['csrf']=bin2hex(random_bytes(32));
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'csrf'=>$_SESSION['csrf']]);
     }
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
-    if(!in_array($action,['state','open','close','pending','cancel-pending'],true))aurum_send(['error'=>'Unknown action'],400);
-    $uid=(string)$_SESSION['uid'];$role=(string)($_SESSION['role']??'trader');$csrf=(string)$_SESSION['csrf'];session_write_close();
-    $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}}
-    $result=$store->transaction(aurum_scope($uid),function(array &$s)use($q,$action,$body){
+    if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending','create-account','list-accounts','request-simulated-payout'],true))aurum_send(['error'=>'Unknown action'],400);
+    $uid=(string)$_SESSION['uid'];$csrf=(string)$_SESSION['csrf'];session_write_close();
+    $identity=Accounts::authorize($store,$uid);$role=Identity::admin($identity)?'admin':'trader';
+    $accountId=Accounts::requestedId();
+    if($action==='list-accounts')aurum_send(['accounts'=>Accounts::listing($store,$uid)]);
+    if($action==='create-account'){
+        $size=filter_var($body['size']??null,FILTER_VALIDATE_INT);if($size===false)throw new InvalidArgumentException('Invalid account size');
+        $newId=Accounts::create($store,$uid,$identity['email'],$size,Challenges::current($store));
+        aurum_send(['accounts'=>Accounts::listing($store,$uid),'createdAccountId'=>$newId]);
+    }
+    $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=NewsCalendar::decorate(Engine::quote((new OkxFeed())->ticker()),NewsCalendar::current($store));}catch(Throwable $e){}}
+    $result=$store->transaction(Accounts::scope($uid,$accountId),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
-        $a=&$s['account'];$error=null;$id=null;
+        $a=&$s['account'];Engine::ensureLedger($a);$error=null;$id=null;
+        if($q!==null&&abs((int)(microtime(true)*1000)-$q['ts'])>10000)$q=null;
         if($q!==null){try{Engine::mark($a,$q);}catch(RuntimeException $e){$q=null;}}
         if($action!=='state'){
             $key=$body['requestId']??'';
             if(!is_string($key)||!preg_match('/^[a-zA-Z0-9-]{16,80}$/D',$key))$error='Invalid request ID';
             elseif(array_key_exists($key,$a['requests']))$id=$a['requests'][$key];
-            elseif($q===null)$error='Feed unavailable or stale; order blocked';
+            elseif($q===null&&!in_array($action,['cancel-pending','request-simulated-payout'],true))$error='Feed unavailable or stale; order blocked';
             else{
                 try{
                     if($action==='open')$id=Engine::open($a,$q,$body);
-                    elseif($action==='close'){ $id=(string)($body['id']??'');Engine::close($a,$id,$q); }
+                    elseif($action==='close'){ $id=(string)($body['id']??'');$units=array_key_exists('units',$body)?filter_var($body['units'],FILTER_VALIDATE_INT):null;if($units===false)throw new InvalidArgumentException('Invalid closing size');Engine::close($a,$id,$q,'manual',$units); }
+                    elseif($action==='modify-protection'){$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
+                    elseif($action==='modify-pending'){$id=Engine::modifyPending($a,(string)($body['id']??''),$q,$body);}
+                    elseif($action==='request-simulated-payout'){$gross=filter_var($body['grossCents']??null,FILTER_VALIDATE_INT);if($gross===false||$gross>100000000)throw new InvalidArgumentException('Invalid virtual amount');$id=SimulatedPayout::request($a,$gross,(int)(microtime(true)*1000));}
                     elseif($action==='pending')$id=Engine::placePending($a,$q,$body);
                     else{$id=(string)($body['id']??'');Engine::cancelPending($a,$id);}
                     $a['requests'][$key]=$id;
-                    if(count($a['requests'])>500)$a['requests']=array_slice($a['requests'],-400,null,true);
-                    Engine::mark($a,$q);
+                    if($q!==null)Engine::mark($a,$q);
                 }catch(InvalidArgumentException $e){$error=$e->getMessage();}
             }
         }
         $view=$a;unset($view['requests']);$view['margin']=Engine::margin($a);
-        return ['account'=>$view,'feed'=>$q===null?'offline':'live','error'=>$error,'id'=>$id];
+        return ['account'=>$view,'feed'=>$q===null?'offline':'live','newsStatus'=>$q['newsStatus']??'unknown','error'=>$error,'id'=>$id];
     });
-    aurum_send($result+['authenticated'=>true,'role'=>$role,'csrf'=>$csrf],$result['error']===null?200:409);
+    aurum_send($result+['authenticated'=>true,'role'=>$role,'csrf'=>$csrf,'accountId'=>$accountId],$result['error']===null?200:409);
 }catch(InvalidArgumentException|JsonException $e){aurum_send(['error'=>'Invalid request or credentials'],400);}
 catch(Throwable $e){error_log('Aurum API: '.get_class($e));aurum_send(['error'=>'Service unavailable'],503);}
