@@ -44,6 +44,7 @@ See [deployment/INSTALL.md](deployment/INSTALL.md). Copy the built `aurum/public
 - REST: `https://www.okx.com/api/v5/market/ticker` and `/api/v5/market/candles`.
 - WebSocket: `wss://ws.okx.com/ws/v5/public` (port 443; OKX retired public port 8443 in October 2026).
 - Public market data only; no API keys and no OKX order placement.
+- OKX public instrument metadata reports contract value in XAU; Aurum reads the current `ctVal`, lot size and tick size at runtime. The current contract specification is 0.001 XAU per contract (1,000 contracts per ounce). The simulator uses troy ounces and defines 100 oz as one simulated lot; these are not OKX contract counts.
 - The contract is USDT quoted. The virtual USD ledger assumes USDT/USD parity; it does not perform a currency conversion.
 
 ## Critical operational limits
