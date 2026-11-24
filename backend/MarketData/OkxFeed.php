@@ -17,6 +17,26 @@ final class OkxFeed {
         if (($json['code']??null)!=='0' || !is_array($json['data']??null) || !$json['data']) throw new \RuntimeException('OKX data unavailable');
         return $json['data'];
     }
+    private function publicRequest(string $path, array $params): array {
+        $url='https://www.okx.com/api/v5/public/'.$path.'?'.http_build_query($params);
+        $curl=curl_init($url);
+        curl_setopt_array($curl,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>3,CURLOPT_TIMEOUT=>6,CURLOPT_FOLLOWLOCATION=>false]);
+        $body=curl_exec($curl);$status=curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
+        if(!is_string($body)||$status!==200)throw new \\RuntimeException('OKX instrument metadata unavailable');
+        $json=json_decode($body,true,512,JSON_THROW_ON_ERROR);
+        if(($json['code']??null)!=='0'||!is_array($json['data']??null)||!$json['data'])throw new \\RuntimeException('OKX instrument metadata unavailable');
+        return $json['data'];
+    }
+    public function instrument(): array {
+        $row=$this->publicRequest('instruments',['instType'=>'SWAP','instId'=>self::INSTRUMENT])[0];
+        $ctVal=(float)($row['ctVal']??0);$lotSz=(float)($row['lotSz']??0);$tickSz=(float)($row['tickSz']??0);
+        if(($row['instId']??'')!==self::INSTRUMENT||($row['state']??'')!=='live'||($row['ctValCcy']??'')!=='XAU'||($row['settleCcy']??'')!=='USDT'||$ctVal<=0||$lotSz<=0||$tickSz<=0)throw new \\RuntimeException('Unexpected OKX contract specification');
+        return ['provider'=>'OKX','instrument'=>self::INSTRUMENT,'state'=>$row['state'],'contractType'=>$row['ctType']??null,
+            'contractValue'=>$ctVal,'contractValueCurrency'=>$row['ctValCcy'],'lotSize'=>$lotSz,'minimumContracts'=>(float)($row['minSz']??$lotSz),
+            'tickSize'=>$tickSz,'settlementCurrency'=>$row['settleCcy'],'contractsPerOunce'=>1/$ctVal,
+            'simulatedLotOunces'=>100,'contractsPerSimulatedLot'=>100/$ctVal,
+            'note'=>'Aurum simulated position sizes are ounces, not OKX contract counts.'];
+    }
     public function ticker(): array {
         $row=$this->request('ticker',[])[0];
         $bid=(float)($row['bidPx']??0); $ask=(float)($row['askPx']??0); $last=(float)($row['last']??0); $ts=(int)($row['ts']??0);
