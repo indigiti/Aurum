@@ -70,13 +70,14 @@ final class OkxFeed {
     }
     public function candles(string $bar='1m', int $limit=100): array {
         if (!in_array($bar,['1m','5m','15m','30m','1H','4H','1Dutc'],true) || $limit<1 || $limit>300) throw new \InvalidArgumentException('Invalid candle parameters');
-        $rows=$this->request('candles',['bar'=>$bar,'limit'=>$limit]);
-        $out=[];
-        foreach(array_reverse($rows) as $r) {
-            if(count($r)<9 || (int)$r[0]<=0) throw new \RuntimeException('Invalid candle');
-            $out[]=['time'=>intdiv((int)$r[0],1000),'open'=>(float)$r[1],'high'=>(float)$r[2],'low'=>(float)$r[3],'close'=>(float)$r[4],'confirmed'=>$r[8]==='1'];
-        }
-        return $out;
+        return $this->cached('candles-'.$bar.'-'.$limit,15,function()use($bar,$limit){
+            $rows=$this->request('candles',['bar'=>$bar,'limit'=>$limit]);
+            $out=[];
+            foreach(array_reverse($rows) as $r) {
+                if(count($r)<9 || (int)$r[0]<=0) throw new \RuntimeException('Invalid candle');
+                $out[]=['time'=>intdiv((int)$r[0],1000),'open'=>(float)$r[1],'high'=>(float)$r[2],'low'=>(float)$r[3],'close'=>(float)$r[4],'confirmed'=>$r[8]==='1'];
+            }
+            return $out;
         });
     }
 }
