@@ -2,10 +2,13 @@
 declare(strict_types=1);
 if(PHP_SAPI!=='cli'){http_response_code(404);exit;}
 $root=getenv('AURUM_PRIVATE_PATH')?:dirname(__DIR__);
-$dir=rtrim($root,'/').'/private-storage';$dsn=getenv('DB_DSN');
+$localFile=rtrim($root,'/').'/config/local.php';$local=is_file($localFile)?require $localFile:[];
+if(!is_array($local))$local=[];
+$cfg=static function(string $key,mixed $default=null)use($local){$v=getenv($key);return $v!==false&&$v!==''?$v:($local[$key]??$default);};
+$dir=rtrim($root,'/').'/private-storage';$dsn=$cfg('DB_DSN');
 if(!$dsn||!str_starts_with($dsn,'mysql:')){fwrite(STDERR,"Set DB_DSN for MariaDB\n");exit(2);}
 try{
-    $pdo=new PDO($dsn,getenv('DB_USER')?:'',getenv('DB_PASSWORD')?:'',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
+    $pdo=new PDO($dsn,$cfg('DB_USER',''),$cfg('DB_PASSWORD',''),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
     $pdo->exec("CREATE TABLE IF NOT EXISTS aurum_state_v2(scope VARCHAR(90) NOT NULL PRIMARY KEY,payload JSON NOT NULL,updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $records=[];$legacy=$dir.'/state.json';
     if(is_file($legacy)){
