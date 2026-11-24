@@ -1,9 +1,26 @@
-# Cloudways staging installation
-The artifact is built for /aurum. Build with AURUM_BASE_PATH="" if hosting at domain root. No Node.js or Python server required.
-- Upload the contents of the artifact's public_html to the target document root or /aurum folder. Install backend and database outside the entire public document root; do not put them inside a publicly accessible subdirectory. For /aurum, edit API require paths to the private sibling directory matching your Cloudways layout. Keep private-storage next to backend outside the webroot. PHP 8.2+ with curl is required.
-- Protect staging with HTTPS and Cloudways access restrictions; registration is a prototype and lacks production rate limiting, verification and recovery. Disable reverse proxy/cache for all API URLs.
-- Set STORAGE_DRIVER=json (default) and APP_ENV=staging. Verify PHP can write the private storage directory.
-- Test /api/market.php?action=ticker and /api/trading.php, then register a virtual account. Market feed may be unavailable due to regional/network access. Orders are blocked when stale.
-- Production compatibility: import database/schema.sql into MariaDB using the database manager, configure APP_ENV=production, STORAGE_DRIVER=mariadb, DB_DSN=mysql:host=...;dbname=...;charset=utf8mb4, DB_USER and DB_PASSWORD using private environment configuration. No silent JSON fallback.
-- Existing JSON state migration is not yet implemented. Do not switch an occupied deployment to MariaDB without a validated migration. MariaDB compatibility uses a serialized transaction row, not a scalable normalized ledger.
-- No continuous worker: SL/TP and drawdown are evaluated on observed request-time server quotes only. No tick history, pending orders, fees, swaps, payment or real execution. Do not run paid challenges.
+# Aurum Cloudways deployment
+
+## Package layout
+- Copy the contents of `aurum/public_html/` into Cloudways document root `public_html/aurum/`.
+- Copy `aurum-private/` into the application root beside `public_html`, never into the public document root.
+- Configure PHP environment variable `AURUM_PRIVATE_PATH` to the absolute path of that private directory. PHP 8.2+, curl, PDO and PDO_MySQL are required.
+- Build uses Node.js in GitHub Actions only. Cloudways does not run Node or Python for this application.
+
+## Database-free staging
+- Set `APP_ENV=staging`, `STORAGE_DRIVER=json`, `AURUM_PRIVATE_PATH=/absolute/app/path/aurum-private`.
+- Ensure PHP can create `aurum-private/private-storage` with permissions restricted to the application user.
+- Keep staging behind HTTPS and Cloudways access restrictions. The demo registration is not production-ready identity management.
+- Exclude `/aurum/api/*` from page caching. API responses are private/no-store except public market candles.
+- Test `/aurum/api/market.php?action=ticker`, `/aurum/api/market.php?action=candles`, registration, orders, SL/TP and account risk rules.
+
+## MariaDB cutover
+- Create a MariaDB database and import `aurum-private/database/schema.sql`.
+- Set `APP_ENV=production`, `STORAGE_DRIVER=mariadb`, `AURUM_PRIVATE_PATH`, `DB_DSN=mysql:host=HOST;dbname=DATABASE;charset=utf8mb4`, `DB_USER`, `DB_PASSWORD`, and `AURUM_ADMIN_EMAILS`.
+- Back up the JSON private-storage directory. Run the one-time migration from a trusted shell: `php aurum-private/backend/migrate-json-to-mariadb.php` with the same private environment variables. It inserts missing account scopes, verifies existing rows, refuses conflicting overwrites and retains JSON source files.
+- Switch `STORAGE_DRIVER=mariadb` only after migration verification. Never fall back to JSON in production.
+
+## Operational limitations
+- This MVP evaluates orders, stops, targets and drawdown when the PHP API observes a fresh OKX REST quote. It does not guarantee unattended stop execution between requests. A dedicated persistent worker and server-side market stream are mandatory before any funded or paid challenge.
+- OKX XAU-USDT-SWAP is a USDT-quoted gold perpetual proxy, not spot XAU/USD. The simulator assumes USDT/USD parity for its virtual USD ledger. Validate data display rights and jurisdiction before public launch.
+- No payments, real broker execution, actual payouts, identity verification, KYC/AML, support tooling or commercial challenge sales are enabled.
+- JSON is single-host staging storage. MariaDB uses one transactionally locked JSON payload per user for this MVP; high-volume production requires normalized account, order, fill, ledger and audit tables.
