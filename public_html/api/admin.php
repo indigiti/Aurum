@@ -36,7 +36,7 @@ try{
     $result=$store->transaction(aurum_scope($target),function(array &$s)use($action,$email){
         if(!is_array($s['account']??null))throw new InvalidArgumentException('Account not found');
         $a=&$s['account'];$before=$a['status'];
-        if($action==='lock'&&$a['status']==='active')$a['status']='locked';
+        if($action==='lock'&&$a['status']==='active'){$a['status']='locked';$a['pending']=[];}
         elseif($action==='unlock'&&$a['status']==='locked')$a['status']='active';
         elseif($action==='reset'){
             $dollars=(int)($a['initial']/100);$rules=$a['rules']??Challenges::defaults();$a=Engine::account($dollars,$rules);
