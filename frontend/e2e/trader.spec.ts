@@ -212,3 +212,18 @@ test('V4 mobile order sheet, risk sizing and price alerts',async({page})=>{
  await page.getByRole('button',{name:'Create price alert'}).click();
  await expect(page.locator('.alertRow')).toContainText('triggered');
 });
+
+test('V4 chart indicators, secondary timeframe and workspace preferences',async({page})=>{
+ await mockPublicMarket(page);await page.goto('./');
+ await page.getByRole('button',{name:'BB',exact:true}).click();
+ await page.getByRole('button',{name:'VWAP',exact:true}).click();
+ await page.getByLabel('Oscillator indicator').selectOption('RSI');
+ await expect(page.locator('.oscillatorPanel')).toContainText('RSI 14');
+ await page.getByRole('button',{name:'Toggle multi-chart'}).click();
+ await page.getByLabel('Secondary timeframe').selectOption('1H');
+ await expect(page.locator('.secondaryHost canvas').first()).toBeVisible();
+ await page.reload();
+ await expect(page.getByRole('button',{name:'BB',exact:true})).toHaveAttribute('aria-pressed','true');
+ await expect(page.getByLabel('Secondary timeframe')).toHaveValue('1H');
+ await expect(page.getByLabel('Oscillator indicator')).toHaveValue('RSI');
+});
