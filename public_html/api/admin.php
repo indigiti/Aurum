@@ -2,6 +2,7 @@
 declare(strict_types=1);
 use Aurum\Challenges;
 use Aurum\Engine;
+use Aurum\Identity;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store, private');header('X-Content-Type-Options: nosniff');
@@ -12,7 +13,7 @@ $uid=(string)$_SESSION['uid'];$csrf=(string)($_SESSION['csrf']??'');session_writ
 try{
     $store=aurum_storage();$self=$store->transaction(aurum_scope($uid),static fn(array &$s)=>$s['user']??null);
     $email=strtolower((string)($self['email']??''));
-    if(!$email||!in_array($email,aurum_admin_emails(),true))admin_send(['error'=>'Administrator access required'],403);
+    if(!is_array($self)||!Identity::admin($self))admin_send(['error'=>'Administrator access required'],403);
     if($_SERVER['REQUEST_METHOD']==='GET'){
         $users=[];
         foreach($store->all('user-') as $scope=>$state){
@@ -23,7 +24,9 @@ try{
         $driver=(string)aurum_config('STORAGE_DRIVER','json');$database='not-required';
         if($driver==='mariadb'){try{$store->transaction('health-probe',static fn(array &$s)=>true);$database='connected';}catch(Throwable $e){$database='error';}}
         $market='offline';if(aurum_config('APP_ENV','staging')!=='test'){try{$quote=(new OkxFeed())->ticker();$market=($quote['stale']??true)?'stale':'live';}catch(Throwable $e){}}
-        $system=['environment'=>aurum_config('APP_ENV','staging'),'storageDriver'=>$driver,'database'=>$database,'phpVersion'=>PHP_VERSION,'marketFeed'=>$market,'marketInstrument'=>OkxFeed::INSTRUMENT];
+        $workerFile=aurum_private_root().'/private-storage/risk-worker-health.json';$worker=is_file($workerFile)?json_decode((string)file_get_contents($workerFile),true):null;
+        $workerStatus=is_array($worker)&&time()-(int)($worker['timestamp']??0)<=15&&($worker['status']??'')==='observed'&&($worker['errors']??1)===0?'recent-observation':'not-running-or-stale';
+        $system=['riskWorker'=>$workerStatus,'environment'=>aurum_config('APP_ENV','staging'),'storageDriver'=>$driver,'database'=>$database,'phpVersion'=>PHP_VERSION,'marketFeed'=>$market,'marketInstrument'=>OkxFeed::INSTRUMENT];
         admin_send(['users'=>$users,'rules'=>$rules,'system'=>$system,'counts'=>['users'=>count($users),'active'=>count(array_filter($users,static fn($u)=>$u['status']==='active')),'failed'=>count(array_filter($users,static fn($u)=>$u['status']==='failed'))]]);
     }
     if($_SERVER['REQUEST_METHOD']!=='POST')admin_send(['error'=>'Method not allowed'],405);

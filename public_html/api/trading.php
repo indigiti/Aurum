@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 use Aurum\Engine;
+use Aurum\Identity;
 use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
@@ -39,15 +40,36 @@ try{
         $rateScope='rate-'.hash('sha256',$email);
         $allowed=$store->transaction($rateScope,function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=10){$s['attempts']=$attempts;return false;}$attempts[]=$now;$s['attempts']=$attempts;return true;});
         if(!$allowed)aurum_send(['error'=>'Too many authentication attempts. Try again in 15 minutes.'],429);
-        $uid=hash('sha256',$email);$isAdmin=in_array($email,aurum_admin_emails(),true);$rules=Challenges::current($store);
-        $store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$isAdmin,$rules){
+        $uid=hash('sha256',$email);$rules=Challenges::current($store);
+        $ipScope='rate-ip-'.hash('sha256',(string)($_SERVER['REMOTE_ADDR']??'unknown'));
+        $allowedIp=$store->transaction($ipScope,static function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=60)return false;$attempts[]=$now;$s['attempts']=$attempts;return true;});
+        if(!$allowedIp)aurum_send(['error'=>'Too many requests'],429);
+        $identity=$store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$rules){
             if($action==='register'){
                 if(is_array($s['user']??null))throw new InvalidArgumentException('Unable to register');
-                $s['user']=['email'=>$email,'hash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>$isAdmin?'admin':'trader','createdAt'=>time()];
+                $s['user']=['email'=>$email,'hash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>'trader','createdAt'=>time()];
                 $s['account']=Engine::account((int)($body['size']??100000),$rules);
             }elseif(!is_array($s['user']??null)||!password_verify($password,(string)($s['user']['hash']??'')))throw new InvalidArgumentException('Invalid credentials');
-            if($isAdmin)$s['user']['role']='admin';
+            $user=&$s['user'];
+            if(Identity::requiresVerification($email)&&!Identity::verified($user)){
+                $code=$body['verificationCode']??'';
+                if(!is_string($code))throw new InvalidArgumentException('Invalid code');
+                if($code!==''){
+                    if(!Identity::verify($user,trim($code),time()))throw new InvalidArgumentException('Invalid verification code');
+                }else{
+                    if(($user['verificationExpires']??0)>time()+840)return ['verify'=>true,'code'=>null];
+                    return ['verify'=>true,'code'=>Identity::issue($user,time())];
+                }
+            }
+            $user['role']=Identity::admin($user)?'admin':'trader';
+            if(password_needs_rehash($user['hash'],PASSWORD_DEFAULT))$user['hash']=password_hash($password,PASSWORD_DEFAULT);
+            return ['verify'=>false,'role'=>$user['role']];
         });
+        if($identity['verify']){
+            $sent=$identity['code']===null?null:Identity::send($email,$identity['code']);
+            aurum_send(['authenticated'=>false,'verificationRequired'=>true,'csrf'=>$_SESSION['csrf'],'message'=>$sent===false?'Email delivery is unavailable. Contact the administrator.':'Enter the verification code sent to your email; use Sign in after entering it.']);
+        }
+        $isAdmin=$identity['role']==='admin';
         $store->transaction($rateScope,static function(array &$s){$s['attempts']=[];});
         session_regenerate_id(true);$_SESSION['uid']=$uid;$_SESSION['role']=$isAdmin?'admin':'trader';$_SESSION['csrf']=bin2hex(random_bytes(32));
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'csrf'=>$_SESSION['csrf']]);
@@ -58,6 +80,7 @@ try{
     $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}}
     $result=$store->transaction(aurum_scope($uid),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
+        if(Identity::requiresVerification((string)($s['user']['email']??''))&&!Identity::verified($s['user']??[]))throw new InvalidArgumentException('Email verification required');
         $a=&$s['account'];Engine::ensureLedger($a);$error=null;$id=null;
         if($q!==null){try{Engine::mark($a,$q);}catch(RuntimeException $e){$q=null;}}
         if($action!=='state'){
