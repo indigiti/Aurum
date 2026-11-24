@@ -70,7 +70,7 @@ try{
         if(isset($_SESSION['uid']))aurum_send(['error'=>'Sign out before starting a demo'],409);
         if($action==='reset-demo'&&!Demo::active())aurum_send(['error'=>'No active demo'],401);
         if($action==='reset-demo'||!Demo::active()){
-            session_regenerate_id(true);Demo::start();$_SESSION['csrf']=bin2hex(random_bytes(32));
+            if($action==='start-demo'){session_regenerate_id(true);$_SESSION['csrf']=bin2hex(random_bytes(32));}Demo::start();
         }
         $a=$_SESSION['demo']['account'];$view=$a;unset($view['requests']);$view['margin']=Engine::margin($a);
         aurum_send(['authenticated'=>true,'role'=>'demo','demo'=>true,'demoEnabled'=>true,'accountId'=>'primary','account'=>$view,'accounts'=>Demo::listing(),'csrf'=>$_SESSION['csrf'],'feed'=>'offline']);
@@ -82,7 +82,7 @@ try{
         $q=null;
         if(aurum_config('APP_ENV','staging')==='test')$q=['bid'=>400000,'ask'=>400025,'ts'=>(int)(microtime(true)*1000),'newsStatus'=>'clear'];
         else{try{$q=NewsCalendar::decorate(Engine::quote((new OkxFeed())->ticker()),NewsCalendar::current($store));}catch(Throwable $e){}}
-        if($action!=='state'&&count($_SESSION['demo']['account']['requests'])>=300&&!array_key_exists((string)($body['requestId']??''),$_SESSION['demo']['account']['requests']))aurum_send(['error'=>'Demo trade limit reached; reset the demo to continue'],409);
+        if($action!=='state'&&count($_SESSION['demo']['account']['requests'])>=300&&(!is_string($body['requestId']??null)||!array_key_exists($body['requestId'],$_SESSION['demo']['account']['requests'])))aurum_send(['error'=>'Demo trade limit reached; reset the demo to continue'],409);
         $result=aurum_execute($_SESSION['demo'],$q,$action,$body);
         aurum_send($result+['authenticated'=>true,'role'=>'demo','demo'=>true,'demoEnabled'=>true,'csrf'=>$_SESSION['csrf'],'accountId'=>'primary'],$result['error']===null?200:409);
     }
