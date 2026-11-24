@@ -12,13 +12,17 @@ try{
         $old=json_decode((string)file_get_contents($legacy),true,512,JSON_THROW_ON_ERROR);
         foreach(($old['users']??[]) as $uid=>$user)$records['user-'.$uid]=['user'=>$user,'account'=>$old['accounts'][$uid]??null];
     }
-    foreach(glob($dir.'/user-*.json')?:[] as $path){
-        $scope=basename($path,'.json');if(!preg_match('/^user-[a-f0-9]{64}$/D',$scope))continue;
+    foreach(glob($dir.'/*.json')?:[] as $path){
+        $scope=basename($path,'.json');
+        if(!preg_match('/^(?:user-[a-f0-9]{64}|config-challenges)$/D',$scope))continue;
         $records[$scope]=json_decode((string)file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
     }
     if(!$records){fwrite(STDERR,"No account JSON records found in {$dir}\n");exit(3);}
     $backup=$dir.'/backups';if(!is_dir($backup)&&!mkdir($backup,0700,true)&&!is_dir($backup))throw new RuntimeException('Backup directory unavailable');
-    if(is_file($legacy)&&!copy($legacy,$backup.'/state-'.gmdate('Ymd-His').'.json'))throw new RuntimeException('Could not back up legacy state');
+    foreach(glob($dir.'/*.json')?:[] as $source){
+        $name=basename($source);$target=$backup.'/'.gmdate('Ymd-His').'-'.$name;
+        if(!copy($source,$target))throw new RuntimeException("Could not back up {$name}");
+    }
     $insert=$pdo->prepare('INSERT IGNORE INTO aurum_state_v2(scope,payload) VALUES (?,?)');$check=$pdo->prepare('SELECT payload FROM aurum_state_v2 WHERE scope=?');
     $pdo->beginTransaction();$added=0;
     foreach($records as $scope=>$state){
