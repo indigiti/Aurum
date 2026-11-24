@@ -3,7 +3,11 @@ declare(strict_types=1);
 use Aurum\Challenges;
 use Aurum\Engine;
 $private=getenv('AURUM_PRIVATE_PATH');
-if(!$private){$candidate=dirname(__DIR__,2);$private=is_file($candidate.'/backend/bootstrap.php')?$candidate:dirname(__DIR__,3).'/aurum-private';}
+if(!$private){
+    $candidate=dirname(__DIR__,2);
+    if(is_file($candidate.'/backend/bootstrap.php'))$private=$candidate;
+    else{$parent=dirname($candidate);$private=is_dir($parent.'/aurum-private')?$parent.'/aurum-private':$candidate.'/aurum-private';}
+}
 require_once rtrim($private,'/').'/backend/bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store, private');header('X-Content-Type-Options: nosniff');
 ini_set('session.use_strict_mode','1');session_set_cookie_params(['httponly'=>true,'secure'=>!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off','samesite'=>'Strict','path'=>dirname(dirname($_SERVER['SCRIPT_NAME'])) ?: '/']);session_start();
