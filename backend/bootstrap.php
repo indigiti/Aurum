@@ -4,6 +4,7 @@ require_once __DIR__.'/Storage.php';
 require_once __DIR__.'/Engine.php';
 require_once __DIR__.'/Identity.php';
 require_once __DIR__.'/Accounts.php';
+require_once __DIR__.'/Demo.php';
 require_once __DIR__.'/NewsCalendar.php';
 require_once __DIR__.'/SimulatedPayout.php';
 require_once __DIR__.'/Challenges.php';

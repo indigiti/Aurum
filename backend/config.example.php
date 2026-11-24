@@ -7,6 +7,7 @@ return [
     'DB_USER' => '',
     'DB_PASSWORD' => '',
     'AURUM_ADMIN_EMAILS' => '',
+    // DEMO_ENABLED defaults to true in staging, false in production. Set explicitly to override.
     'REQUIRE_EMAIL_VERIFICATION' => false, // always required for production and administrators
     'MAIL_FROM' => '', // verified sender domain with working PHP mail transport
     'AI_REVIEW_ENABLED' => false,
