@@ -2,6 +2,7 @@
 declare(strict_types=1);
 use Aurum\Challenges;
 use Aurum\Engine;
+use Aurum\MarketData\OkxFeed;
 $private=getenv('AURUM_PRIVATE_PATH');
 if(!$private){
     $candidate=dirname(__DIR__,2);
