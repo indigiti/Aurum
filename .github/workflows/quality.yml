@@ -10,6 +10,19 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: aurum-ci
+          MARIADB_DATABASE: aurum_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -22,6 +35,12 @@ jobs:
         run: php tests/engine.php
       - name: PHP API smoke tests
         run: bash tests/api-smoke.sh
+      - name: MariaDB adapter and migration tests
+        env:
+          DB_DSN: mysql:host=127.0.0.1;port=3306;dbname=aurum_test;charset=utf8mb4
+          DB_USER: root
+          DB_PASSWORD: aurum-ci
+        run: php tests/mariadb-smoke.php
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
