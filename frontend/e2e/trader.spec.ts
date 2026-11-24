@@ -155,3 +155,19 @@ test('demo exposure book matches buys and sells and preserves net exposure',asyn
   await expect(page.getByRole('heading',{name:'Open positions · 0'})).toBeVisible();
   await expect(page.locator('.exposureGrid')).toContainText('0.00 FLAT');
 });
+
+test('workspace status is compact and appears before live controls',async({page})=>{
+ await mockPublicMarket(page);await page.setViewportSize({width:1440,height:900});await page.goto('./');
+ await page.getByRole('button',{name:'Try demo',exact:true}).click();
+ await expect(page.locator('header .headerContext')).toBeVisible();
+ await expect(page.locator('header .headerDemoBalance')).toHaveText('$100K virtual start');
+ await expect(page.locator('header').getByRole('button',{name:'Reset demo',exact:true})).toBeVisible();
+ await expect(page.locator('.demoBanner,.marketDisclosure,main > .notice')).toHaveCount(0);
+ expect(await page.locator('header .headerContext').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('header .status')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+ await page.locator('header .headerMarket summary').click();
+ await expect(page.getByText('Market and simulation information',{exact:true})).toBeVisible();
+ await expect(page.locator('.headerMarketDetails')).toContainText('not spot XAU/USD');
+ await page.locator('header .headerMarket summary').click();
+ await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
+});
