@@ -1,8 +1,8 @@
-import {test,expect} from '@playwright/test';
+import {test,expect,type Route,type WebSocketRoute} from '@playwright/test';
 
 async function mockPublicMarket(page:any){
-  await page.routeWebSocket('wss://ws.okx.com/ws/v5/public',socket=>socket.close());
-  await page.route('**/api/market.php**',async route=>{
+  await page.routeWebSocket('wss://ws.okx.com/ws/v5/public',(socket:WebSocketRoute)=>socket.close());
+  await page.route('**/api/market.php**',async (route:Route)=>{
     const action=new URL(route.request().url()).searchParams.get('action');
     if(action==='instrument'){
       await route.fulfill({json:{symbol:'XAUUSD',instrument:'XAU-USDT-SWAP',quoteCurrency:'USDT',proxy:true,data:{provider:'OKX',instrument:'XAU-USDT-SWAP',state:'live',contractType:'linear',contractValue:0.001,contractValueCurrency:'XAU',lotSize:1,minimumContracts:1,tickSize:0.1,settlementCurrency:'USDT',contractsPerOunce:1000,simulatedLotOunces:100,contractsPerSimulatedLot:100000}}});
