@@ -6,6 +6,8 @@ async function mockPublicMarket(page:any){
     const action=new URL(route.request().url()).searchParams.get('action');
     if(action==='instrument'){
       await route.fulfill({json:{symbol:'XAUUSD',instrument:'XAU-USDT-SWAP',quoteCurrency:'USDT',proxy:true,data:{provider:'OKX',instrument:'XAU-USDT-SWAP',state:'live',contractType:'linear',contractValue:0.001,contractValueCurrency:'XAU',lotSize:1,minimumContracts:1,tickSize:0.1,settlementCurrency:'USDT',contractsPerOunce:1000,simulatedLotOunces:100,contractsPerSimulatedLot:100000}}});
+    }else if(action==='depth'){
+      await route.fulfill({json:{data:{timestamp:Date.now(),bids:[{price:4000,contracts:10}],asks:[{price:4000.25,contracts:12}]}}});
     }else if(action==='candles'){
       const now=Math.floor(Date.now()/1000/60)*60;
       const data=Array.from({length:60},(_,i)=>{const p=4000+i*.2;return {time:now-(59-i)*60,open:p,high:p+1,low:p-1,close:p+.2,confirmed:true}});
@@ -189,4 +191,24 @@ test('icon header keeps accessible names and touch targets on narrow mobile scre
  await expect(header.locator('.headerConnection .headerMarketDetails')).toContainText('Server execution feed:');
  await header.locator('.headerConnection summary').click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
+});
+
+test('V4 mobile order sheet, risk sizing and price alerts',async({page})=>{
+ await mockPublicMarket(page);await page.setViewportSize({width:390,height:844});await page.goto('./');
+ await page.getByRole('button',{name:'Try demo',exact:true}).click();
+ await page.getByRole('button',{name:'Open order ticket',exact:true}).click();
+ await expect(page.locator('#order-ticket')).toBeVisible();
+ await page.getByLabel('Stop loss (optional)').fill('3990');
+ await page.getByText('Position-size calculator',{exact:true}).click();
+ await expect(page.getByRole('button',{name:'Use calculated size'})).toBeEnabled();
+ await page.getByRole('button',{name:'Use calculated size'}).click();
+ await page.getByText('Depth of market',{exact:true}).click();
+ await expect(page.locator('.depthGrid')).toContainText('4000.25');
+ await page.getByRole('button',{name:'Close order ticket',exact:true}).click();
+ await expect(page.locator('#order-ticket')).toBeHidden();
+ await page.getByRole('button',{name:'Menu',exact:true}).click();
+ await page.getByRole('button',{name:'Notifications',exact:true}).click();
+ await page.getByLabel('Alert price').fill('3999');
+ await page.getByRole('button',{name:'Create price alert'}).click();
+ await expect(page.locator('.alertRow')).toContainText('triggered');
 });

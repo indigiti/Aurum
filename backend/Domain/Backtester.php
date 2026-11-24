@@ -31,7 +31,7 @@ final class Backtester {
             $trades[]=['side'=>$position['direction']===1?'long':'short','entry'=>$position['entry'],'exit'=>$exit,'units'=>$units,'pnl'=>$pnl,'openedAt'=>$position['time'],'closedAt'=>$time,'reason'=>$reason];
             if($pnl>0){$wins++;$grossWin+=$pnl;}elseif($pnl<0){$losses++;$grossLoss+=abs($pnl);}$position=null;
         };
-        for($i=$slow;$i<count($rows)-1;$i++){
+        for($i=$slow;$i<count($rows);$i++){
             if($position!==null&&($stopDistance>0||$targetDistance>0)){
                 $dir=$position['direction'];$entry=$position['entry'];$stop=$entry-$dir*$stopDistance;$target=$entry+$dir*$targetDistance;
                 $row=$rows[$i];$open=(float)$row['open'];$low=(float)$row['low'];$high=(float)$row['high'];
@@ -41,6 +41,7 @@ final class Backtester {
                 if($hitStop)$close($dir===1?min($open,$stop):max($open,$stop),(int)$row['time'],'stop-distance');
                 elseif($hitTarget)$close($target,(int)$row['time'],'target-distance');
             }
+            if($i===count($rows)-1)break;
             $up=$f[$i-1]<=$s[$i-1]&&$f[$i]>$s[$i];$down=$f[$i-1]>=$s[$i-1]&&$f[$i]<$s[$i];
             if(!$up&&!$down)continue;
             $direction=$up?1:-1;$next=(float)$rows[$i+1]['open'];$time=(int)$rows[$i+1]['time'];

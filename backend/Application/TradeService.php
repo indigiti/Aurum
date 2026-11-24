@@ -37,7 +37,7 @@ final class TradeService {
                     }
                     elseif($action==='create-alert')$id=TradingTools::alert($a,$body,$q);
                     elseif($action==='cancel-alert'){$id=(string)($body['id']??'');TradingTools::cancelAlert($a,$id);}
-                    elseif($action==='modify-protection'){$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
+                    elseif($action==='modify-protection'){if(isset($body['snapshot'])&&(!is_string($body['snapshot'])||!hash_equals(Exposure::snapshot($a),$body['snapshot'])))throw new InvalidArgumentException('Position book changed; review again');$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
                     elseif($action==='modify-pending'){$id=Engine::modifyPending($a,(string)($body['id']??''),$q,$body);}
                     elseif($action==='request-simulated-payout'){$gross=filter_var($body['grossCents']??null,FILTER_VALIDATE_INT);if($gross===false||$gross>100000000)throw new InvalidArgumentException('Invalid virtual amount');$id=SimulatedPayout::request($a,$gross,(int)(microtime(true)*1000));}
                     elseif($action==='pending')$id=Engine::placePending($a,$q,$body);

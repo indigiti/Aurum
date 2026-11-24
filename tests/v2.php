@@ -11,6 +11,7 @@ require_once __DIR__.'/../backend/SimulatedPayout.php';
 require_once __DIR__.'/../backend/Backtester.php';
 require_once __DIR__.'/../backend/AiReview.php';
 require_once __DIR__.'/../backend/Domain/Exposure.php';
+require_once __DIR__.'/../backend/Domain/TradingTools.php';
 require_once __DIR__.'/../backend/Application/TradeService.php';
 function ck(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 $user=[];$code=\Aurum\Identity::issue($user,1000);
