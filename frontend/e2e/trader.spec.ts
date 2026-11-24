@@ -168,7 +168,7 @@ test('workspace status is compact and appears before live controls',async({page}
  expect(await page.locator('header .headerReset').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('header .headerConnection')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
  await page.locator('header .headerMarket summary').click();
  await expect(page.getByText('Market and simulation information',{exact:true})).toBeVisible();
- await expect(page.locator('.headerMarketDetails')).toContainText('not spot XAU/USD');
+ await expect(page.locator('header .headerMarket .headerMarketDetails')).toContainText('not spot XAU/USD');
  await page.locator('header .headerMarket summary').click();
  await page.setViewportSize({width:390,height:844});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
