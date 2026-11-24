@@ -7,7 +7,7 @@ export function subscribeOkx(onQuote:(q:Quote)=>void,onStatus:(s:'connecting'|'l
   const connect=()=>{
     if(stopped)return;
     onStatus('connecting');
-    socket=new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
+    socket=new WebSocket('wss://ws.okx.com/ws/v5/public');
     socket.onopen=()=>socket?.send(JSON.stringify({op:'subscribe',args:[{channel:'tickers',instId:INSTRUMENT}]}));
     socket.onmessage=(e)=>{
       received=Date.now();
