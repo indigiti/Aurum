@@ -2,13 +2,7 @@
 declare(strict_types=1);
 use Aurum\Backtester;
 use Aurum\MarketData\OkxFeed;
-$private=getenv('AURUM_PRIVATE_PATH');
-if(!$private){
-    $candidate=dirname(__DIR__,2);
-    if(is_file($candidate.'/backend/bootstrap.php'))$private=$candidate;
-    else{$parent=dirname($candidate);$private=is_dir($parent.'/aurum-private')?$parent.'/aurum-private':$candidate.'/aurum-private';}
-}
-require_once rtrim($private,'/').'/backend/bootstrap.php';
+require_once __DIR__.'/_bootstrap.php';
 require_once rtrim($private,'/').'/backend/Backtester.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store, private');header('X-Content-Type-Options: nosniff');
 ini_set('session.use_strict_mode','1');session_set_cookie_params(['httponly'=>true,'secure'=>!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off','samesite'=>'Strict','path'=>dirname(dirname($_SERVER['SCRIPT_NAME'])) ?: '/']);session_start();

@@ -41,8 +41,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-## Cloudways
-See [deployment/INSTALL.md](deployment/INSTALL.md). Copy the built `aurum/public_html` contents to `public_html/aurum/` and the private `aurum-private/` folder beside `public_html`. Copy `aurum-private/backend/config.example.php` to `aurum-private/config/local.php` and set private configuration. Keep backend and storage outside the document root.
+## Cloudways / DigiOps
+DigiOps deployment settings: repository `indigiti/Aurum`, branch `main`, artifact `digiops-release`, public URL `/aurum/`, public path `public_html/aurum/`, private path `private_html/aurum/`. CI packages the static frontend and PHP APIs in `release/public/`, the private PHP backend and schema in `release/private/`, and source metadata in `release/RELEASE.json`. API discovery is automatic; no Cloudways shell is needed. Existing private configuration and storage are not packaged. See [deployment/INSTALL.md](deployment/INSTALL.md). A manual Cloudways ZIP is also available.
 
 ## Market data details
 - OKX instrument: `XAU-USDT-SWAP`.

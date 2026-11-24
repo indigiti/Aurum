@@ -1,22 +1,23 @@
 # Aurum Cloudways deployment
 
-## Package layout
-- Copy the contents of `aurum/public_html/` into Cloudways document root `public_html/aurum/`.
-- Copy `aurum-private/` into the application root beside `public_html`, never into the public document root.
-- Copy `aurum-private/backend/config.example.php` to `aurum-private/config/local.php`, create the `config` directory if needed, and set private values there. Configure `AURUM_PRIVATE_PATH` only if the default sibling path is different. PHP 8.2+, curl, PDO and PDO_MySQL are required.
-- Build uses Node.js in GitHub Actions only. Cloudways does not run Node or Python for this application.
+## DigiOps deployment (recommended)
+Register the repository `indigiti/Aurum`, branch `main`, artifact `digiops-release`, URL `/aurum/`, public path `public_html/aurum/`, private path `private_html/aurum/`. Health URL: `https://stage.digiti.in/aurum/`; optionally use health path `/api/health.php` for backend and storage verification. Select a successful main-branch artifact and deploy in DigiOps. No Cloudways CLI, Node.js or Python runtime is required.
+
+The artifact contains `public/`, `private/`, and `RELEASE.json` at its root. DigiOps publishes the public payload and overlays only deployable private code; existing configuration and JSON storage are not included in the artifact. The PHP API discovers `private_html/aurum/backend/bootstrap.php` automatically. A missing private runtime produces HTTP 503.
+
+Manual ZIP fallback: copy the contents of `aurum/public_html/` to `public_html/aurum/` and the contents of `aurum-private/` to `private_html/aurum/` (or keep the legacy sibling `aurum-private/`). PHP 8.2+, cURL, PDO and PDO_MySQL are required for MariaDB. Copy the private `backend/config.example.php` into `config/local.php` only when you need custom settings; never overwrite an existing configuration.
 
 ## Database-free staging
-- In `config/local.php`, set `APP_ENV=staging`, `STORAGE_DRIVER=json`, and `AURUM_ADMIN_EMAILS` to the exact administrator email addresses.
-- Ensure PHP can create `aurum-private/private-storage` with permissions restricted to the application user.
+- In `config/local.php`, set `APP_ENV=staging`, `STORAGE_DRIVER=json`, and leave `AURUM_ADMIN_EMAILS` empty until trusted admin identities are provisioned. The current prototype does not verify email ownership; do not expose allowlisted registration to untrusted users.
+- Ensure PHP can create `private_html/aurum/private-storage` with permissions restricted to the application user.
 - Keep staging behind HTTPS and Cloudways access restrictions. The demo registration is not production-ready identity management.
 - Exclude `/aurum/api/*` from page caching. API responses are private/no-store except public market candles.
 - Test `/aurum/api/market.php?action=ticker`, `/aurum/api/market.php?action=candles`, registration, orders, SL/TP and account risk rules.
 
 ## MariaDB cutover
-- Create a MariaDB database and import `aurum-private/database/schema.sql`.
+- Create a MariaDB database and import `private_html/aurum/database/schema.sql`.
 - In `config/local.php`, set `APP_ENV=production`, `STORAGE_DRIVER=mariadb`, `DB_DSN=mysql:host=HOST;dbname=DATABASE;charset=utf8mb4`, `DB_USER`, `DB_PASSWORD`, and `AURUM_ADMIN_EMAILS`.
-- Back up the JSON private-storage directory. Run the one-time migration from a trusted shell: `php aurum-private/backend/migrate-json-to-mariadb.php`; it reads the private configuration file. It inserts missing account scopes, verifies existing rows, refuses conflicting overwrites and retains JSON source files.
+- Back up the JSON private-storage directory. Run the one-time migration from a trusted shell: `php private_html/aurum/backend/migrate-json-to-mariadb.php`; it reads the private configuration file. It inserts missing account scopes, verifies existing rows, refuses conflicting overwrites and retains JSON source files.
 - Switch `STORAGE_DRIVER=mariadb` only after migration verification. Never fall back to JSON in production.
 
 ## Operational limitations

@@ -65,21 +65,32 @@ jobs:
           APP_ENV: test
           STORAGE_DRIVER: json
           AURUM_ADMIN_EMAILS: admin@example.test
-          AURUM_PRIVATE_PATH: ${{ github.workspace }}/dist/aurum-private
           E2E_BASE_URL: http://127.0.0.1:8080/aurum/
         run: |
           set -euo pipefail
-          mkdir -p /tmp/aurum-e2e/aurum
-          cp -R dist/aurum/public_html/. /tmp/aurum-e2e/aurum/
-          php -S 127.0.0.1:8080 -t /tmp/aurum-e2e >/tmp/aurum-php.log 2>&1 &
+          unset AURUM_PRIVATE_PATH
+          mkdir -p /tmp/aurum-e2e/public_html/aurum /tmp/aurum-e2e/private_html/aurum
+          cp -R release/public/. /tmp/aurum-e2e/public_html/aurum/
+          cp -R release/private/. /tmp/aurum-e2e/private_html/aurum/
+          php -S 127.0.0.1:8080 -t /tmp/aurum-e2e/public_html >/tmp/aurum-php.log 2>&1 &
           PHP_PID=$!
           trap 'kill "$PHP_PID" 2>/dev/null || true' EXIT
           for i in $(seq 1 40); do
             if curl -fsS "$E2E_BASE_URL" >/dev/null; then break; fi
             sleep .25
           done
+          curl -fsS "${E2E_BASE_URL}api/health.php" | php -r '$d=json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR); if($d["status"]!=="ok" || $d["sourceSha"]!==getenv("GITHUB_SHA"))exit(1);'
+          curl -fsS "${E2E_BASE_URL}api/trading.php" | php -r '$d=json_decode(stream_get_contents(STDIN),true,16,JSON_THROW_ON_ERROR); if($d["authenticated"]!==false || empty($d["csrf"]))exit(1);'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "${E2E_BASE_URL}backend/bootstrap.php")" = 404
           cd frontend
           npm run test:e2e
+      - name: Upload DigiOps release
+        uses: actions/upload-artifact@v4
+        with:
+          name: digiops-release
+          path: release/
+          include-hidden-files: true
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: aurum-cloudways

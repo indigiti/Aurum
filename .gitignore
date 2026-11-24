@@ -4,3 +4,6 @@
 /frontend/out/
 /dist/
 .env*
+
+/release/
+/config/local.php
