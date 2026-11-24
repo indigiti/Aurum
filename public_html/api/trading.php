@@ -4,7 +4,11 @@ use Aurum\Engine;
 use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 $private=getenv('AURUM_PRIVATE_PATH');
-if(!$private){$candidate=dirname(__DIR__,2);$private=is_file($candidate.'/backend/bootstrap.php')?$candidate:dirname(__DIR__,3).'/aurum-private';}
+if(!$private){
+    $candidate=dirname(__DIR__,2);
+    if(is_file($candidate.'/backend/bootstrap.php'))$private=$candidate;
+    else{$parent=dirname($candidate);$private=is_dir($parent.'/aurum-private')?$parent.'/aurum-private':$candidate.'/aurum-private';}
+}
 require_once rtrim($private,'/').'/backend/bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, private');
