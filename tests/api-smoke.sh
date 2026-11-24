@@ -8,6 +8,7 @@ s=socket.socket();s.bind(('127.0.0.1',0));print(s.getsockname()[1]);s.close()
 PY
 )"
 mkdir -p "$TMP/private"
+cp -R "$ROOT/backend" "$TMP/private/"
 export APP_ENV=staging STORAGE_DRIVER=json AURUM_PRIVATE_PATH="$TMP/private" AURUM_ADMIN_EMAILS=""
 php -S "127.0.0.1:$PORT" -t "$ROOT/public_html" >"$TMP/php.log" 2>&1 &
 PID=$!
