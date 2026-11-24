@@ -14,12 +14,12 @@ async function mockPublicMarket(page:any){
   });
 }
 async function register(page:any,email:string){
-  await page.goto('/');
+  await page.goto('./');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password (10+ characters)').fill('Aurum-E2E-Password-2026');
   await page.getByLabel('Virtual account').selectOption('5000');
   await page.getByRole('button',{name:'Create account'}).click();
-  await expect(page.getByText('$5,000.00')).toBeVisible();
+  await expect(page.getByText('$5,000.00').first()).toBeVisible();
 }
 test('trader can register, inspect challenge, analytics and navigate on mobile',async({page})=>{
   await mockPublicMarket(page);
