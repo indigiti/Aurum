@@ -1,26 +1,33 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
-import {createChart,ColorType,type ISeriesApi,type IPriceLine,type UTCTimestamp} from 'lightweight-charts';
+import {createChart,ColorType,type ISeriesApi,type IPriceLine,type IChartApi,type UTCTimestamp} from 'lightweight-charts';
 import type {Account,Candle as DomainCandle} from '../domain/models';
 import type {Quote} from '../domain/quote';
 import {apiPath,type ApiClient} from '../application/ports';
 import {intervals} from './format';
+import {chartTheme} from './chartTheme';
+import type {Theme} from './useAppearance';
 type Candle=Omit<DomainCandle,'time'>&{time:UTCTimestamp};
-export function useTradingChart(client:ApiClient,q:Quote|undefined,stream:string,bar:string,tab:string,account:Account|undefined,setNotice:(s:string)=>void){
+export function useTradingChart(client:ApiClient,q:Quote|undefined,stream:string,bar:string,tab:string,account:Account|undefined,setNotice:(s:string)=>void,theme:Theme){
+const chartRef=useRef<IChartApi|null>(null);
+const [showEma,setShowEma]=useState(false);
+const emaLine=useRef<ISeriesApi<'Line'>|undefined>(undefined);
 const [showSma,setShowSma]=useState(true);
 const [drawing,setDrawing]=useState(false);
 const [levels,setLevels]=useState<number[]>([]);
 const [chartGeneration,setChartGeneration]=useState(0);
 const host=useRef<HTMLDivElement>(null);const series=useRef<ISeriesApi<'Candlestick'>|undefined>(undefined);const candle=useRef<Candle|undefined>(undefined);const rowsRef=useRef<Candle[]>([]);const fastLine=useRef<ISeriesApi<'Line'>|undefined>(undefined);const slowLine=useRef<ISeriesApi<'Line'>|undefined>(undefined);const priceLines=useRef<IPriceLine[]>([]);const drawingRef=useRef(false);
- const refreshIndicators=()=>{const rows=rowsRef.current;for(const [period,line] of [[20,fastLine.current],[50,slowLine.current]] as const){line?.setData(rows.slice(period-1).map((r,i)=>({time:r.time,value:rows.slice(i,i+period).reduce((n,c)=>n+c.close,0)/period})))}};
- useEffect(()=>{if(tab!=='Terminal'||!host.current)return;const el=host.current;const chart=createChart(el,{width:el.clientWidth,height:400,layout:{background:{type:ColorType.Solid,color:'#101722'},textColor:'#8290a3'},grid:{vertLines:{color:'#202a38'},horzLines:{color:'#202a38'}},timeScale:{timeVisible:true,secondsVisible:false},rightPriceScale:{borderColor:'#303b4c'}});
- const s=chart.addCandlestickSeries({upColor:'#2ccca0',downColor:'#ef6b77',borderVisible:false,wickUpColor:'#2ccca0',wickDownColor:'#ef6b77'});series.current=s;fastLine.current=chart.addLineSeries({color:'#e3b861',lineWidth:1,priceLineVisible:false,lastValueVisible:false});slowLine.current=chart.addLineSeries({color:'#6ca6ef',lineWidth:1,priceLineVisible:false,lastValueVisible:false});rowsRef.current=[];priceLines.current=[];setChartGeneration(v=>v+1);chart.subscribeClick(p=>{if(drawingRef.current&&p.point){const level=s.coordinateToPrice(p.point.y);if(level!==null)setLevels(old=>[...old.slice(-9),Math.round(level*100)/100])}});let active=true;let initial=true;candle.current=undefined;
+ const refreshIndicators=()=>{const rows=rowsRef.current;for(const [period,line] of [[20,fastLine.current],[50,slowLine.current]] as const){line?.setData(rows.slice(period-1).map((r,i)=>({time:r.time,value:rows.slice(i,i+period).reduce((n,c)=>n+c.close,0)/period})))}let ema=0;emaLine.current?.setData(rows.map((r,i)=>{ema=i===0?r.close:r.close*(2/21)+ema*(19/21);return {time:r.time,value:ema}}))};
+ useEffect(()=>{if(tab!=='Terminal'||!host.current)return;const el=host.current;const chart=createChart(el,{width:el.clientWidth,height:Math.max(280,el.clientHeight),...chartTheme(theme)});chartRef.current=chart;
+ const s=chart.addCandlestickSeries({upColor:'#2ccca0',downColor:'#ef6b77',borderVisible:false,wickUpColor:'#2ccca0',wickDownColor:'#ef6b77'});series.current=s;fastLine.current=chart.addLineSeries({color:'#e3b861',lineWidth:1,priceLineVisible:false,lastValueVisible:false});slowLine.current=chart.addLineSeries({color:'#6ca6ef',lineWidth:1,priceLineVisible:false,lastValueVisible:false});emaLine.current=chart.addLineSeries({color:'#b18bea',lineWidth:1,priceLineVisible:false,lastValueVisible:false,visible:false});rowsRef.current=[];priceLines.current=[];setChartGeneration(v=>v+1);chart.subscribeClick(p=>{if(drawingRef.current&&p.point){const level=s.coordinateToPrice(p.point.y);if(level!==null)setLevels(old=>[...old.slice(-9),Math.round(level*100)/100])}});let active=true;let initial=true;candle.current=undefined;
  async function load(){try{const r=await client.request(apiPath('market')+'?action=candles&bar='+bar+'&limit=150');const j=r.data;if(!r.ok||!Array.isArray(j.data))throw Error();if(active){const rows:Candle[]=j.data;const last=rows[rows.length-1];if(candle.current&&last&&candle.current.time>=last.time){if(candle.current.time===last.time)rows[rows.length-1]=candle.current;else rows.push(candle.current)}s.setData(rows);rowsRef.current=rows;refreshIndicators();candle.current=rows[rows.length-1];if(initial){chart.timeScale().fitContent();initial=false}}}catch{if(active)setNotice('Historical candles unavailable. Check OKX access and instrument availability.')}}void load();
- const timer=setInterval(()=>void load(),15000);const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth}));ro.observe(el);
- return()=>{active=false;clearInterval(timer);ro.disconnect();chart.remove();series.current=undefined;fastLine.current=undefined;slowLine.current=undefined;priceLines.current=[];candle.current=undefined}},[bar,tab]);
+ const timer=setInterval(()=>void load(),15000);const ro=new ResizeObserver(()=>chart.applyOptions({width:el.clientWidth,height:Math.max(280,el.clientHeight)}));ro.observe(el);
+ return()=>{active=false;clearInterval(timer);ro.disconnect();chart.remove();chartRef.current=null;emaLine.current=undefined;series.current=undefined;fastLine.current=undefined;slowLine.current=undefined;priceLines.current=[];candle.current=undefined}},[bar,tab]);
  useEffect(()=>{if(!q||!series.current||stream!=='live'||!candle.current)return;const t=(Math.floor(q.timestamp/1000/intervals[bar])*intervals[bar]) as UTCTimestamp;const old=candle.current;if(t<old.time)return;const next=t===old.time?{...old,high:Math.max(old.high,q.last),low:Math.min(old.low,q.last),close:q.last}:{time:t,open:q.last,high:q.last,low:q.last,close:q.last};series.current.update(next);const rows=rowsRef.current;if(rows.length&&rows[rows.length-1].time===t)rows[rows.length-1]=next;else rows.push(next);rowsRef.current=rows.slice(-300);refreshIndicators();candle.current=next},[q,stream,bar]);
+ useEffect(()=>{chartRef.current?.applyOptions(chartTheme(theme))},[theme,chartGeneration]);
+ useEffect(()=>{emaLine.current?.applyOptions({visible:showEma})},[showEma,chartGeneration]);
  useEffect(()=>{drawingRef.current=drawing},[drawing]);
  useEffect(()=>{fastLine.current?.applyOptions({visible:showSma});slowLine.current?.applyOptions({visible:showSma})},[showSma,chartGeneration]);
  useEffect(()=>{const s=series.current;if(!s)return;for(const line of priceLines.current)s.removePriceLine(line);priceLines.current=[];for(const level of levels)priceLines.current.push(s.createPriceLine({price:level,color:'#c4a4fa',lineWidth:1,axisLabelVisible:true,title:'Level'}));for(const p of Object.values(account?.positions||{})){priceLines.current.push(s.createPriceLine({price:p.entry/100,color:'#55b7ce',lineWidth:1,axisLabelVisible:true,title:p.side.toUpperCase()+' entry'}));if(p.sl!==null)priceLines.current.push(s.createPriceLine({price:p.sl/100,color:'#ef6b77',lineWidth:1,axisLabelVisible:true,title:'SL'}));if(p.tp!==null)priceLines.current.push(s.createPriceLine({price:p.tp/100,color:'#2ccca0',lineWidth:1,axisLabelVisible:true,title:'TP'}))}},[levels,account,chartGeneration]);
-return {host,showSma,setShowSma,drawing,setDrawing,levels,setLevels};
+return {host,showSma,setShowSma,showEma,setShowEma,drawing,setDrawing,levels,setLevels,fitChart:()=>chartRef.current?.timeScale().fitContent()};
 }

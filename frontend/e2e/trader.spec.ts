@@ -104,3 +104,34 @@ test('one-click demo can trade, reload, reset and exit without credentials',asyn
   await page.getByRole('button',{name:'Exit demo',exact:true}).click();
   await expect(page.getByRole('button',{name:'Try demo',exact:true})).toBeVisible();
 });
+
+test('V3 chart controls, theme, panel and mobile layout remain usable',async({page})=>{
+  await mockPublicMarket(page);
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto('./');
+  await expect(page.getByRole('region',{name:'Trading chart'})).toBeVisible();
+  await expect(page.locator('.chartHost canvas').first()).toBeVisible();
+  await page.getByRole('button',{name:'Light theme',exact:true}).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.getByRole('button',{name:'EMA',exact:true}).click();
+  await expect(page.getByRole('button',{name:'EMA',exact:true})).toHaveAttribute('aria-pressed','true');
+  await page.getByRole('button',{name:'Hide order ticket',exact:true}).click();
+  await expect(page.locator('#order-ticket')).toBeHidden();
+  await page.getByRole('button',{name:'Show order ticket',exact:true}).click();
+  await expect(page.locator('#order-ticket')).toBeVisible();
+  await page.getByRole('button',{name:'Collapse sidebar',exact:true}).click();
+  await expect(page.locator('.shell')).toHaveClass(/navCompact/);
+  await page.getByRole('button',{name:'Expand chart',exact:true}).click();
+  await expect(page.locator('.shell')).toHaveClass(/chartExpanded/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.shell')).not.toHaveClass(/chartExpanded/);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.setViewportSize({width:390,height:844});
+  await expect(page.getByRole('navigation',{name:'Mobile shortcuts'})).toBeVisible();
+  await page.getByRole('button',{name:'Open order ticket',exact:true}).click();
+  await expect(page.locator('#order-ticket')).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
+  await page.getByRole('button',{name:'Open risk',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Challenges',exact:true})).toBeVisible();
+});
