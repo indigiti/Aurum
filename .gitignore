@@ -1,0 +1,6 @@
+/private-storage/
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+/dist/
+.env*
