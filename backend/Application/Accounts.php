@@ -6,9 +6,9 @@ final class Accounts {
         if(!preg_match('/^[a-f0-9]{64}$/D',$uid)||!preg_match('/^(primary|a[1-4])$/D',$id))throw new \InvalidArgumentException('Invalid account');
         return 'user-'.$uid.($id==='primary'?'':'-'.$id);
     }
-    public static function authorize(Storage $store,string $uid): array {
+    public static function authorize(Storage $store,string $uid,IdentityPolicy $policy): array {
         $u=$store->transaction(self::scope($uid),static fn(array &$s)=>$s['user']??null);
-        if(!is_array($u)||!isset($u['hash'],$u['email'])||(Identity::requiresVerification($u['email'])&&!Identity::verified($u)))throw new \InvalidArgumentException('Sign in with verified identity');
+        if(!is_array($u)||!isset($u['hash'],$u['email'])||($policy->requiresVerification($u['email'])&&!Identity::verified($u)))throw new \InvalidArgumentException('Sign in with verified identity');
         return $u;
     }
     public static function listing(Storage $store,string $uid): array {

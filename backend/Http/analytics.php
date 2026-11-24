@@ -13,5 +13,5 @@ if(Demo::active()){
 }
 if(!isset($_SESSION['uid'])){http_response_code(401);echo '{"error":"Sign in required"}';exit;}
 $uid=(string)$_SESSION['uid'];session_write_close();
-try{$store=aurum_storage();Accounts::authorize($store,$uid);$accountId=RequestContext::requestedId();$data=$store->transaction(Accounts::scope($uid,$accountId),function(array &$s){if(!is_array($s['account']??null))throw new RuntimeException();return ['analytics'=>Analytics::summarize($s['account']),'backtests'=>array_slice(array_reverse($s['account']['backtests']??[]),0,10)];});echo json_encode($data,JSON_THROW_ON_ERROR);}
+try{$store=aurum_storage();Accounts::authorize($store,$uid,aurum_identity_policy());$accountId=RequestContext::requestedId();$data=$store->transaction(Accounts::scope($uid,$accountId),function(array &$s){if(!is_array($s['account']??null))throw new RuntimeException();return ['analytics'=>Analytics::summarize($s['account']),'backtests'=>array_slice(array_reverse($s['account']['backtests']??[]),0,10)];});echo json_encode($data,JSON_THROW_ON_ERROR);}
 catch(Throwable $e){http_response_code(503);echo '{"error":"Analytics unavailable"}';}

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 use Aurum\ChallengeSettings;
 use Aurum\TradeService;
+use Aurum\AuthService;
 use Aurum\RequestContext;
 use Aurum\Engine;
 use Aurum\Demo;
@@ -62,49 +63,16 @@ try{
         aurum_send($result+['authenticated'=>true,'role'=>'demo','demo'=>true,'demoEnabled'=>true,'csrf'=>$_SESSION['csrf'],'accountId'=>'primary'],$result['error']===null?200:409);
     }
     if(in_array($action,['register','login'],true)){
-        $email=strtolower(trim((string)($body['email']??'')));$password=$body['password']??'';
-        if(!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($email)>254||!is_string($password)||strlen($password)<10||strlen($password)>72)aurum_send(['error'=>'Valid email and 10–72 byte password required'],400);
-        $rateScope='rate-'.hash('sha256',$email);
-        $allowed=$store->transaction($rateScope,function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=10){$s['attempts']=$attempts;return false;}$attempts[]=$now;$s['attempts']=$attempts;return true;});
-        if(!$allowed)aurum_send(['error'=>'Too many authentication attempts. Try again in 15 minutes.'],429);
-        $uid=hash('sha256',$email);$rules=ChallengeSettings::current($store);
-        $ipScope='rate-ip-'.hash('sha256',(string)($_SERVER['REMOTE_ADDR']??'unknown'));
-        $allowedIp=$store->transaction($ipScope,static function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=60)return false;$attempts[]=$now;$s['attempts']=$attempts;return true;});
-        if(!$allowedIp)aurum_send(['error'=>'Too many requests'],429);
-        $identity=$store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$rules){
-            if($action==='register'){
-                if(is_array($s['user']??null))throw new InvalidArgumentException('Unable to register');
-                $s['user']=['email'=>$email,'hash'=>password_hash($password,PASSWORD_DEFAULT),'role'=>'trader','createdAt'=>time()];
-                $s['account']=Engine::account((int)($body['size']??100000),$rules);
-            }elseif(!is_array($s['user']??null)||!password_verify($password,(string)($s['user']['hash']??'')))throw new InvalidArgumentException('Invalid credentials');
-            $user=&$s['user'];
-            if(Identity::requiresVerification($email)&&!Identity::verified($user)){
-                $code=$body['verificationCode']??'';
-                if(!is_string($code))throw new InvalidArgumentException('Invalid code');
-                if($code!==''){
-                    if(!Identity::verify($user,trim($code),time()))throw new InvalidArgumentException('Invalid verification code');
-                }else{
-                    if(($user['verificationExpires']??0)>time()+840)return ['verify'=>true,'code'=>null];
-                    return ['verify'=>true,'code'=>Identity::issue($user,time())];
-                }
-            }
-            $user['role']=Identity::admin($user)?'admin':'trader';
-            if(password_needs_rehash($user['hash'],PASSWORD_DEFAULT))$user['hash']=password_hash($password,PASSWORD_DEFAULT);
-            return ['verify'=>false,'role'=>$user['role']];
-        });
-        if($identity['verify']){
-            $sent=$identity['code']===null?null:aurum_send_verification($email,$identity['code']);
-            aurum_send(['authenticated'=>false,'verificationRequired'=>true,'csrf'=>$_SESSION['csrf'],'message'=>$sent===false?'Email delivery is unavailable. Contact the administrator.':'Enter the verification code sent to your email; use Sign in after entering it.']);
-        }
-        $isAdmin=$identity['role']==='admin';
-        $store->transaction($rateScope,static function(array &$s){$s['attempts']=[];});
-        unset($_SESSION['demo']);session_regenerate_id(true);$_SESSION['uid']=$uid;$_SESSION['role']=$isAdmin?'admin':'trader';$_SESSION['csrf']=bin2hex(random_bytes(32));
+        $identity=AuthService::authenticate($store,aurum_identity_policy(),'aurum_send_verification',$action,$body,(string)($_SERVER['REMOTE_ADDR']??'unknown'));
+        if(isset($identity['error']))aurum_send(['error'=>$identity['error']],$identity['status']);
+        if($identity['verificationRequired']??false)aurum_send($identity+['csrf'=>$_SESSION['csrf']]);
+        unset($_SESSION['demo']);session_regenerate_id(true);$_SESSION['uid']=$identity['uid'];$_SESSION['role']=$identity['role'];$_SESSION['csrf']=bin2hex(random_bytes(32));
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'demo'=>false,'csrf'=>$_SESSION['csrf']]);
     }
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
     if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending','create-account','list-accounts','request-simulated-payout'],true))aurum_send(['error'=>'Unknown action'],400);
     $uid=(string)$_SESSION['uid'];$csrf=(string)$_SESSION['csrf'];session_write_close();
-    $identity=Accounts::authorize($store,$uid);$role=Identity::admin($identity)?'admin':'trader';
+    $identity=Accounts::authorize($store,$uid,aurum_identity_policy());$role=aurum_identity_policy()->admin($identity)?'admin':'trader';
     $accountId=RequestContext::requestedId();
     if($action==='list-accounts')aurum_send(['accounts'=>Accounts::listing($store,$uid)]);
     if($action==='create-account'){

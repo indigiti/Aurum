@@ -1,10 +1,11 @@
 'use client';
 import {useEffect,useRef,useState} from 'react';
 import {createChart,ColorType,type ISeriesApi,type IPriceLine,type UTCTimestamp} from 'lightweight-charts';
-import type {Account,Candle} from '../domain/models';
+import type {Account,Candle as DomainCandle} from '../domain/models';
 import type {Quote} from '../domain/quote';
 import {apiPath,type ApiClient} from '../application/ports';
 import {intervals} from './format';
+type Candle=Omit<DomainCandle,'time'>&{time:UTCTimestamp};
 export function useTradingChart(client:ApiClient,q:Quote|undefined,stream:string,bar:string,tab:string,account:Account|undefined,setNotice:(s:string)=>void){
 const [showSma,setShowSma]=useState(true);
 const [drawing,setDrawing]=useState(false);

@@ -20,7 +20,7 @@ try{
     $fast=filter_var($body['fast']??9,FILTER_VALIDATE_INT);$slow=filter_var($body['slow']??21,FILTER_VALIDATE_INT);$units=filter_var($body['units']??10,FILTER_VALIDATE_INT);
     $spread=filter_var($body['spread']??0.30,FILTER_VALIDATE_FLOAT);$slippage=filter_var($body['slippageBps']??1,FILTER_VALIDATE_FLOAT);$fee=filter_var($body['feePerLot']??0,FILTER_VALIDATE_FLOAT);
     if($fast===false||$slow===false||$units===false||$spread===false||$slippage===false||$fee===false)throw new InvalidArgumentException();
-    if($demo){Demo::guardAccount();}else{$store=aurum_storage();Accounts::authorize($store,$uid);$accountId=RequestContext::requestedId();}
+    if($demo){Demo::guardAccount();}else{$store=aurum_storage();Accounts::authorize($store,$uid,aurum_identity_policy());$accountId=RequestContext::requestedId();}
     $method=$body['method']??'SMA';$mode=$body['mode']??'long';if(!is_string($method)||!is_string($mode))throw new InvalidArgumentException('Invalid strategy');
     $candles=aurum_market()->candles($bar,300);
     if(($body['research']??false)===true){backtest_send(['research'=>Backtester::optimize($candles,$units,$spread,$slippage,$fee,$method,$mode)]);}

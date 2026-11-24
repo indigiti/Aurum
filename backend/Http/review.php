@@ -14,7 +14,7 @@ if($method!=='POST')review_send(['error'=>'Method not allowed'],405);
 if(!hash_equals((string)($_SESSION['csrf']??''),$_SERVER['HTTP_X_CSRF_TOKEN']??''))review_send(['error'=>'CSRF rejected'],403);
 session_write_close();
 try{
-    $store=aurum_storage();$identity=Accounts::authorize($store,$uid);
+    $store=aurum_storage();$identity=Accounts::authorize($store,$uid,aurum_identity_policy());
     if(!Identity::verified($identity))review_send(['error'=>'Verified email required for AI review'],403);
     if(!aurum_review_enabled())review_send(['error'=>'AI review is not configured'],503);
     if((int)($_SERVER['CONTENT_LENGTH']??0)>1024)review_send(['error'=>'Request too large'],413);

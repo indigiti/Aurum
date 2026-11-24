@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 use Aurum\ChallengeSettings;
+use Aurum\AdminService;
 use Aurum\CalendarSettings;
 use Aurum\MarketService;
 use Aurum\Challenges;
@@ -16,7 +17,7 @@ $uid=(string)$_SESSION['uid'];$csrf=(string)($_SESSION['csrf']??'');session_writ
 try{
     $store=aurum_storage();$self=$store->transaction(aurum_scope($uid),static fn(array &$s)=>$s['user']??null);
     $email=strtolower((string)($self['email']??''));
-    if(!is_array($self)||!Identity::admin($self))admin_send(['error'=>'Administrator access required'],403);
+    if(!is_array($self)||!aurum_identity_policy()->admin($self))admin_send(['error'=>'Administrator access required'],403);
     if($_SERVER['REQUEST_METHOD']==='GET'){
         $users=[];
         foreach($store->all('user-') as $scope=>$state){
@@ -36,36 +37,6 @@ try{
     if(!hash_equals($csrf,$_SERVER['HTTP_X_CSRF_TOKEN']??''))admin_send(['error'=>'CSRF rejected'],403);
     if((int)($_SERVER['CONTENT_LENGTH']??0)>16384)admin_send(['error'=>'Request too large'],413);
     $body=json_decode((string)file_get_contents('php://input'),true,32,JSON_THROW_ON_ERROR);if(!is_array($body))throw new InvalidArgumentException();
-    $action=$body['action']??'';
-    if($action==='update-calendar'){
-        if(!is_array($body['calendar']??null))throw new InvalidArgumentException('Calendar required');
-        $calendar=NewsCalendar::validate($body['calendar']);
-        $store->transaction('config-calendar',static function(array &$s)use($calendar){$s['calendar']=$calendar;});
-        admin_send(['ok'=>true,'calendar'=>$calendar]);
-    }
-    if($action==='update-rules'){
-        $rules=Challenges::validate($body['rules']??[]);
-        $store->transaction('config-challenges',function(array &$s)use($rules){$rules['version']=(int)($s['rules']['version']??0)+1;$s['rules']=$rules;});
-        admin_send(['ok'=>true,'rules'=>$rules]);
-    }
-    $target=$body['userId']??'';if(!is_string($target)||!preg_match('/^[a-f0-9]{64}(?:-a[1-4])?$/D',$target))throw new InvalidArgumentException();
-    $result=$store->transaction(aurum_scope($target),function(array &$s)use($action,$email,$body){
-        if(!is_array($s['account']??null))throw new InvalidArgumentException('Account not found');
-        $a=&$s['account'];$before=$a['status'];
-        if($action==='lock'&&$a['status']==='active'){$a['status']='locked';$a['pending']=[];}
-        elseif($action==='unlock'&&$a['status']==='locked')$a['status']='active';
-        elseif(in_array($action,['approve-simulated-payout','reject-simulated-payout'],true)){
-            SimulatedPayout::review($a,(string)($body['payoutId']??''),$action==='approve-simulated-payout',(int)(microtime(true)*1000));
-        }
-        elseif($action==='reset'){
-            if($a['positions']||$a['pending']||array_filter($a['payouts']??[],static fn($p)=>$p['status']==='requested'))throw new InvalidArgumentException('Close positions, cancel orders and resolve payout requests before reset');
-            Engine::ensureLedger($a);Engine::book($a,$a['initial']-$a['balance'],'admin-capital-reset',(int)(microtime(true)*1000));
-            $old=$a;$dollars=(int)($a['initial']/100);$rules=$a['rules']??Challenges::defaults();$a=Engine::account($dollars,$rules);
-            foreach(['ledger','journal','riskEvents','phaseHistory','requests','payouts'] as $key)$a[$key]=$old[$key]??[];
-        }else throw new InvalidArgumentException('Action not permitted for current status');
-        $a['riskEvents'][]=['type'=>'admin-'.$action,'admin'=>$email,'previousStatus'=>$before,'timestamp'=>(int)(microtime(true)*1000)];
-        return ['status'=>$a['status']];
-    });
-    admin_send(['ok'=>true]+$result);
+    admin_send(AdminService::execute($store,$email,$body));
 }catch(InvalidArgumentException|JsonException $e){admin_send(['error'=>$e->getMessage()?:'Invalid request'],400);}
 catch(Throwable $e){error_log('Aurum admin: '.get_class($e));admin_send(['error'=>'Admin operation unavailable'],503);}

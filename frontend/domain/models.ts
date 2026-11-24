@@ -1,9 +1,8 @@
-import type {UTCTimestamp} from 'lightweight-charts';
 export type Position={id:string;side:string;units:number;entry:number;sl:number|null;tp:number|null};
 export type Pending={id:string;type:string;side:string;units:number;price:number;sl:number|null;tp:number|null};
 export type Trade=Position&{exit:number;pnl:number;reason:string;closedAt:number};
 export type Account={payouts?:{id:string;gross:number;traderShare:number;status:string;createdAt:number}[];ledger?:{id:string;type:string;delta:number;balance:number;timestamp:number}[];initial:number;balance:number;equity:number;dayBase:number;phase:number;status:string;positions:Record<string,Position>;pending:Record<string,Pending>;journal:Trade[];margin:number;days:Record<string,boolean>;rules:Record<string,any>;riskEvents:any[];backtests:any[];phaseHistory:any[]};
-export type Candle={time:UTCTimestamp;open:number;high:number;low:number;close:number};
+export type Candle={time:number;open:number;high:number;low:number;close:number};
 export type AccountSummary={id:string;initial:number;equity:number;phase:number;status:string};
 export type Result={demo?:boolean;demoEnabled?:boolean;newsStatus?:string;accountId?:string;accounts?:AccountSummary[];csrf?:string;authenticated?:boolean;role?:string;account?:Account;feed?:string;error?:string;challengeRules?:any};
 export type InstrumentInfo={contractValue:number;contractValueCurrency:string;lotSize:number;minimumContracts:number;tickSize:number;settlementCurrency:string;contractsPerOunce:number;simulatedLotOunces:number;contractsPerSimulatedLot:number};
