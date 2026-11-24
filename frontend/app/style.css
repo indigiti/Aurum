@@ -12,3 +12,6 @@
 .calendarDay{padding:12px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:6px}.headerRight select{width:auto;max-width:170px}textarea{width:100%;padding:12px;background:#0b111b;color:#e7edf5;border:1px solid var(--line);border-radius:7px;font:inherit}input[type=checkbox]{width:auto}
 
 .certificate{border:1px solid var(--gold);padding:24px;margin:16px 0;border-radius:12px}.certificate button{display:block;margin-top:12px}@media print{body *{visibility:hidden}.certificate,.certificate *{visibility:visible;color:#111}.certificate{position:absolute;inset:0;border:2px solid #555;background:white}.certificate button{display:none}}
+
+/* The expanded V2 navigation must scroll on short desktop and mobile viewports. */
+.sidebar{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;min-height:0;scrollbar-width:thin;height:100dvh}.sidebar>*{flex-shrink:0}.sidebar button{min-height:40px}.sidebarFoot{padding-top:12px}@media(max-width:650px){.sidebar.open{height:calc(100dvh - 58px);bottom:0}}
