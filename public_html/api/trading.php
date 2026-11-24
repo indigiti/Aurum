@@ -35,6 +35,9 @@ try{
     if(in_array($action,['register','login'],true)){
         $email=strtolower(trim((string)($body['email']??'')));$password=$body['password']??'';
         if(!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($email)>254||!is_string($password)||strlen($password)<10||strlen($password)>72)aurum_send(['error'=>'Valid email and 10–72 byte password required'],400);
+        $rateScope='rate-'.hash('sha256',$email);
+        $allowed=$store->transaction($rateScope,function(array &$s){$now=time();$attempts=array_values(array_filter($s['attempts']??[],static fn($t)=>is_int($t)&&$t>$now-900));if(count($attempts)>=10){$s['attempts']=$attempts;return false;}$attempts[]=$now;$s['attempts']=$attempts;return true;});
+        if(!$allowed)aurum_send(['error'=>'Too many authentication attempts. Try again in 15 minutes.'],429);
         $uid=hash('sha256',$email);$isAdmin=in_array($email,aurum_admin_emails(),true);$rules=Challenges::current($store);
         $store->transaction(aurum_scope($uid),function(array &$s)use($email,$password,$action,$body,$isAdmin,$rules){
             if($action==='register'){
@@ -44,6 +47,7 @@ try{
             }elseif(!is_array($s['user']??null)||!password_verify($password,(string)($s['user']['hash']??'')))throw new InvalidArgumentException('Invalid credentials');
             if($isAdmin)$s['user']['role']='admin';
         });
+        $store->transaction($rateScope,static function(array &$s){$s['attempts']=[];});
         session_regenerate_id(true);$_SESSION['uid']=$uid;$_SESSION['role']=$isAdmin?'admin':'trader';$_SESSION['csrf']=bin2hex(random_bytes(32));
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'csrf'=>$_SESSION['csrf']]);
     }
