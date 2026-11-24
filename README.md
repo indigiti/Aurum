@@ -19,7 +19,7 @@ A gold-only simulated prop-trading platform. Internal display symbol `XAUUSD` us
 - Historical SMA crossover backtest with next-candle execution and explicit spread/slippage/fee assumptions.
 - Admin allowlist, trader overview, account lock/unlock/reset and challenge rule settings.
 - JSON staging storage and a one-time JSON-to-MariaDB migration script.
-- CI checks, static export and Cloudways ZIP packaging.
+- CI checks, static export, Chromium browser tests and Cloudways ZIP packaging.
 
 ## Local build
 ```bash
@@ -34,6 +34,9 @@ bash deployment/package.sh
 ```bash
 php tests/engine.php
 bash tests/api-smoke.sh
+cd frontend
+npx playwright install chromium
+npm run test:e2e
 ```
 
 ## Cloudways
