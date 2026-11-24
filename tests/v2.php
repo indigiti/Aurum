@@ -5,6 +5,7 @@ require_once __DIR__.'/../backend/Challenges.php';
 require_once __DIR__.'/../backend/Engine.php';
 require_once __DIR__.'/../backend/Identity.php';
 require_once __DIR__.'/../backend/RiskRunner.php';
+require_once __DIR__.'/../backend/Accounts.php';
 function ck(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 $user=[];$code=\Aurum\Identity::issue($user,1000);
 ck(!\Aurum\Identity::verify($user,str_repeat('a',32),1001),'Wrong code rejected');
@@ -17,5 +18,10 @@ $store->transaction('user-risk',function(array &$s)use($q){$s['account']=\Aurum\
 $q['bid']-=2000;$q['ask']-=2000;$q['ts']++;
 $r=\Aurum\RiskRunner::sweep($store,$q);ck($r['failed']===1,'Background worker fails breached account');
 ck($store->transaction('user-risk',static fn(array &$s)=>$s['account']['status'])==='failed','Worker state persisted');
+$uid=str_repeat('a',64);$other=str_repeat('b',64);
+$store->transaction(\Aurum\Accounts::scope($uid),static function(array &$s){$s['account']=\Aurum\Engine::account(5000);});
+$id=\Aurum\Accounts::create($store,$uid,'trader@example.test',10000,\Aurum\Challenges::defaults());ck($id==='a1','Second challenge created');
+ck(count(\Aurum\Accounts::listing($store,$uid))===2,'Independent account listing');
+ck(count(\Aurum\Accounts::listing($store,$other))===0,'Other trader isolation');
 foreach(glob($dir.'/*')?:[] as $p)unlink($p);rmdir($dir);
 echo "Identity and background risk tests passed\n";

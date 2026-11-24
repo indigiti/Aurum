@@ -9,7 +9,7 @@ $dir=rtrim($root,'/').'/private-storage';$dsn=$cfg('DB_DSN');
 if(!$dsn||!str_starts_with($dsn,'mysql:')){fwrite(STDERR,"Set DB_DSN for MariaDB\n");exit(2);}
 try{
     $pdo=new PDO($dsn,$cfg('DB_USER',''),$cfg('DB_PASSWORD',''),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
-    $pdo->exec("CREATE TABLE IF NOT EXISTS aurum_state_v2(scope VARCHAR(90) NOT NULL PRIMARY KEY,payload JSON NOT NULL,updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec((string)file_get_contents(__DIR__.'/../database/schema.sql'));
     $records=[];$legacy=$dir.'/state.json';
     if(is_file($legacy)){
         $old=json_decode((string)file_get_contents($legacy),true,512,JSON_THROW_ON_ERROR);
@@ -17,7 +17,7 @@ try{
     }
     foreach(glob($dir.'/*.json')?:[] as $path){
         $scope=basename($path,'.json');
-        if(!preg_match('/^(?:user-[a-f0-9]{64}|config-challenges)$/D',$scope))continue;
+        if(!preg_match('/^(?:user-[a-f0-9]{64}(?:-a[1-4])?|config-challenges)$/D',$scope))continue;
         $records[$scope]=json_decode((string)file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
     }
     if(!$records){fwrite(STDERR,"No account JSON records found in {$dir}\n");exit(3);}

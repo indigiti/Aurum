@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/Storage.php';
 require_once __DIR__.'/Engine.php';
 require_once __DIR__.'/Identity.php';
+require_once __DIR__.'/Accounts.php';
 require_once __DIR__.'/Challenges.php';
 require_once __DIR__.'/Analytics.php';
 require_once __DIR__.'/Backtester.php';

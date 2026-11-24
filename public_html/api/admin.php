@@ -17,7 +17,7 @@ try{
     if($_SERVER['REQUEST_METHOD']==='GET'){
         $users=[];
         foreach($store->all('user-') as $scope=>$state){
-            $u=$state['user']??null;$a=$state['account']??null;if(!is_array($u)||!is_array($a))continue;
+            $u=$state['user']??(isset($state['ownerEmail'])?['email'=>$state['ownerEmail']]:null);$a=$state['account']??null;if(!is_array($u)||!is_array($a))continue;
             $users[]=['id'=>substr($scope,5),'email'=>$u['email'],'createdAt'=>$u['createdAt']??null,'initial'=>$a['initial'],'balance'=>$a['balance'],'equity'=>$a['equity'],'phase'=>$a['phase'],'status'=>$a['status'],'positions'=>count($a['positions']??[]),'pending'=>count($a['pending']??[]),'trades'=>count($a['journal']??[]),'riskEvents'=>array_slice(array_reverse($a['riskEvents']??[]),0,5)];
         }
         $rules=Challenges::current($store);
@@ -39,7 +39,7 @@ try{
         $store->transaction('config-challenges',function(array &$s)use($rules){$rules['version']=(int)($s['rules']['version']??0)+1;$s['rules']=$rules;});
         admin_send(['ok'=>true,'rules'=>$rules]);
     }
-    $target=$body['userId']??'';if(!is_string($target)||!preg_match('/^[a-f0-9]{64}$/D',$target))throw new InvalidArgumentException();
+    $target=$body['userId']??'';if(!is_string($target)||!preg_match('/^[a-f0-9]{64}(?:-a[1-4])?$/D',$target))throw new InvalidArgumentException();
     $result=$store->transaction(aurum_scope($target),function(array &$s)use($action,$email){
         if(!is_array($s['account']??null))throw new InvalidArgumentException('Account not found');
         $a=&$s['account'];$before=$a['status'];

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 use Aurum\Engine;
 use Aurum\Identity;
+use Aurum\Accounts;
 use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
@@ -75,12 +76,19 @@ try{
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'csrf'=>$_SESSION['csrf']]);
     }
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
-    if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending'],true))aurum_send(['error'=>'Unknown action'],400);
-    $uid=(string)$_SESSION['uid'];$role=(string)($_SESSION['role']??'trader');$csrf=(string)$_SESSION['csrf'];session_write_close();
+    if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending','create-account','list-accounts'],true))aurum_send(['error'=>'Unknown action'],400);
+    $uid=(string)$_SESSION['uid'];$csrf=(string)$_SESSION['csrf'];session_write_close();
+    $identity=Accounts::authorize($store,$uid);$role=Identity::admin($identity)?'admin':'trader';
+    $accountId=Accounts::requestedId();
+    if($action==='list-accounts')aurum_send(['accounts'=>Accounts::listing($store,$uid)]);
+    if($action==='create-account'){
+        $size=filter_var($body['size']??null,FILTER_VALIDATE_INT);if($size===false)throw new InvalidArgumentException('Invalid account size');
+        $newId=Accounts::create($store,$uid,$identity['email'],$size,Challenges::current($store));
+        aurum_send(['accounts'=>Accounts::listing($store,$uid),'createdAccountId'=>$newId]);
+    }
     $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}}
-    $result=$store->transaction(aurum_scope($uid),function(array &$s)use($q,$action,$body){
+    $result=$store->transaction(Accounts::scope($uid,$accountId),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
-        if(Identity::requiresVerification((string)($s['user']['email']??''))&&!Identity::verified($s['user']??[]))throw new InvalidArgumentException('Email verification required');
         $a=&$s['account'];Engine::ensureLedger($a);$error=null;$id=null;
         if($q!==null){try{Engine::mark($a,$q);}catch(RuntimeException $e){$q=null;}}
         if($action!=='state'){
@@ -105,6 +113,6 @@ try{
         $view=$a;unset($view['requests']);$view['margin']=Engine::margin($a);
         return ['account'=>$view,'feed'=>$q===null?'offline':'live','error'=>$error,'id'=>$id];
     });
-    aurum_send($result+['authenticated'=>true,'role'=>$role,'csrf'=>$csrf],$result['error']===null?200:409);
+    aurum_send($result+['authenticated'=>true,'role'=>$role,'csrf'=>$csrf,'accountId'=>$accountId],$result['error']===null?200:409);
 }catch(InvalidArgumentException|JsonException $e){aurum_send(['error'=>'Invalid request or credentials'],400);}
 catch(Throwable $e){error_log('Aurum API: '.get_class($e));aurum_send(['error'=>'Service unavailable'],503);}
