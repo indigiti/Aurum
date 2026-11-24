@@ -135,3 +135,23 @@ test('V3 chart controls, theme, panel and mobile layout remain usable',async({pa
   await page.getByRole('button',{name:'Open risk',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Challenges',exact:true})).toBeVisible();
 });
+
+test('demo exposure book matches buys and sells and preserves net exposure',async({page})=>{
+  await mockPublicMarket(page);await page.goto('./');
+  await page.getByRole('button',{name:'Try demo',exact:true}).click();
+  const size=page.getByLabel('Size (troy ounces · 100 oz = 1 simulated lot)');
+  await size.fill('3');await page.getByRole('button',{name:'Buy market',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open positions · 1'})).toBeVisible();
+  await size.fill('2');await page.getByRole('button',{name:'Sell market',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open positions · 2'})).toBeVisible();
+  await expect(page.locator('.exposureGrid')).toContainText('0.01 BUY');
+  await page.getByRole('button',{name:'Close matched (0.02 / side)',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Review position closure'})).toBeVisible();
+  await page.getByRole('button',{name:'Confirm close',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open positions · 1'})).toBeVisible();
+  await expect(page.locator('.exposureGrid')).toContainText('0.01 BUY');
+  await page.getByRole('button',{name:'Close all positions',exact:true}).click();
+  await page.getByRole('button',{name:'Confirm close',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open positions · 0'})).toBeVisible();
+  await expect(page.locator('.exposureGrid')).toContainText('0.00 FLAT');
+});

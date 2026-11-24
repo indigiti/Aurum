@@ -13,11 +13,21 @@ final class TradeService {
             $key=$body['requestId']??'';
             if(!is_string($key)||!preg_match('/^[a-zA-Z0-9-]{16,80}$/D',$key))$error='Invalid request ID';
             elseif(array_key_exists($key,$a['requests']))$id=$a['requests'][$key];
-            elseif($q===null&&!in_array($action,['cancel-pending','request-simulated-payout'],true))$error='Feed unavailable or stale; order blocked';
+            elseif($q===null&&!in_array($action,['cancel-pending','cancel-all-pending','request-simulated-payout'],true))$error='Feed unavailable or stale; order blocked';
             else{
                 try{
                     if($action==='open')$id=Engine::open($a,$q,$body);
                     elseif($action==='close'){ $id=(string)($body['id']??'');$units=array_key_exists('units',$body)?filter_var($body['units'],FILTER_VALIDATE_INT):null;if($units===false)throw new InvalidArgumentException('Invalid closing size');Engine::close($a,$id,$q,'manual',$units); }
+                    elseif($action==='bulk-close'){
+                        $mode=$body['mode']??null;$ids=$body['ids']??[];$snapshot=$body['snapshot']??null;
+                        if(!is_string($mode)||!is_array($ids)||count($ids)>1000||!is_string($snapshot))throw new InvalidArgumentException('Invalid close request');
+                        foreach($ids as $positionId)if(!is_string($positionId))throw new InvalidArgumentException('Invalid position ID');
+                        Exposure::close($a,$q,$mode,$ids,$snapshot);$id='bulk-close';
+                    }
+                    elseif($action==='cancel-all-pending'){
+                        $snapshot=$body['snapshot']??null;if(!is_string($snapshot))throw new InvalidArgumentException('Invalid order book');
+                        Exposure::cancelAll($a,$snapshot);$id='cancel-all-pending';
+                    }
                     elseif($action==='modify-protection'){$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
                     elseif($action==='modify-pending'){$id=Engine::modifyPending($a,(string)($body['id']??''),$q,$body);}
                     elseif($action==='request-simulated-payout'){$gross=filter_var($body['grossCents']??null,FILTER_VALIDATE_INT);if($gross===false||$gross>100000000)throw new InvalidArgumentException('Invalid virtual amount');$id=SimulatedPayout::request($a,$gross,(int)(microtime(true)*1000));}
@@ -28,7 +38,7 @@ final class TradeService {
                 }catch(InvalidArgumentException $e){$error=$e->getMessage();}
             }
         }
-        $view=$a;unset($view['requests']);$view['margin']=Engine::margin($a);
+        $view=$a;unset($view['requests']);$view['margin']=Engine::margin($a);$view['exposure']=Exposure::summarize($a,$q);
         return ['account'=>$view,'feed'=>$q===null?'offline':'live','newsStatus'=>$q['newsStatus']??'unknown','error'=>$error,'id'=>$id];
 }
 }
