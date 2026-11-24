@@ -56,7 +56,9 @@ test('allowlisted administrator can inspect health and update challenge rules',a
   await page.getByLabel('Daily loss %').fill('4');
   await page.getByLabel('Maximum loss %').fill('8');
   await page.getByRole('button',{name:'Save rules for new accounts'}).click();
-  await expect(page.getByText('Admin action completed')).toBeVisible();
+  await expect(page.locator('header .headerMessage summary')).toHaveAttribute('title','Admin action completed');
+  await page.locator('header .headerMessage summary').click();
+  await expect(page.locator('.headerMessagePanel')).toContainText('Admin action completed');
 });
 
 test('guest navigation never repeats the authentication form',async({page})=>{
@@ -87,7 +89,7 @@ test('one-click demo can trade, reload, reset and exit without credentials',asyn
   await mockPublicMarket(page);
   await page.goto('./');
   await page.getByRole('button',{name:'Try demo',exact:true}).click();
-  await expect(page.getByText('DEMO ACCOUNT',{exact:true})).toBeVisible();
+  await expect(page.locator('header .headerDemoBalance')).toHaveText('$100K');
   await expect(page.locator('main > .stats strong').first()).toHaveText('$100,000.00');
   await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Admin',exact:true})).toHaveCount(0);
@@ -160,14 +162,31 @@ test('workspace status is compact and appears before live controls',async({page}
  await mockPublicMarket(page);await page.setViewportSize({width:1440,height:900});await page.goto('./');
  await page.getByRole('button',{name:'Try demo',exact:true}).click();
  await expect(page.locator('header .headerContext')).toBeVisible();
- await expect(page.locator('header .headerDemoBalance')).toHaveText('$100K virtual start');
+ await expect(page.locator('header .headerDemoBalance')).toHaveText('$100K');
  await expect(page.locator('header').getByRole('button',{name:'Reset demo',exact:true})).toBeVisible();
  await expect(page.locator('.demoBanner,.marketDisclosure,main > .notice')).toHaveCount(0);
- expect(await page.locator('header .headerContext').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('header .status')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+ expect(await page.locator('header .headerReset').evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('header .headerConnection')!)&Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
  await page.locator('header .headerMarket summary').click();
  await expect(page.getByText('Market and simulation information',{exact:true})).toBeVisible();
  await expect(page.locator('.headerMarketDetails')).toContainText('not spot XAU/USD');
  await page.locator('header .headerMarket summary').click();
  await page.setViewportSize({width:390,height:844});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
+});
+
+test('icon header keeps accessible names and touch targets on narrow mobile screens',async({page})=>{
+ await mockPublicMarket(page);await page.setViewportSize({width:320,height:720});await page.goto('./');
+ await page.getByRole('button',{name:'Try demo',exact:true}).click();
+ const header=page.locator('header');
+ await expect(header.locator('.headerDemoBalance')).toHaveText('$100K');
+ for(const name of ['Reset demo','Light theme','Exit demo']){
+  const b=header.getByRole('button',{name,exact:true});await expect(b).toBeVisible();
+  await expect(b).toHaveAttribute('title',name);await expect(b).toHaveText('');
+  const bounds=await b.boundingBox();expect(bounds?.width).toBeGreaterThanOrEqual(44);expect(bounds?.height).toBeGreaterThanOrEqual(44);
+ }
+ await header.locator('.headerConnection summary').click();
+ await expect(header.locator('.headerConnection .headerMarketDetails')).toBeVisible();
+ await expect(header.locator('.headerConnection .headerMarketDetails')).toContainText('Server execution feed:');
+ await header.locator('.headerConnection summary').click();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1)).toBe(true);
 });
