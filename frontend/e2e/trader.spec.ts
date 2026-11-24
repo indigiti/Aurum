@@ -82,3 +82,25 @@ test('guest navigation never repeats the authentication form',async({page})=>{
   await page.getByRole('button',{name:'Terminal',exact:true}).click();
   await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
 });
+
+test('one-click demo can trade, reload, reset and exit without credentials',async({page})=>{
+  await mockPublicMarket(page);
+  await page.goto('./');
+  await page.getByRole('button',{name:'Try demo',exact:true}).click();
+  await expect(page.getByText('DEMO ACCOUNT',{exact:true})).toBeVisible();
+  await expect(page.locator('main > .stats strong').first()).toHaveText('$100,000.00');
+  await expect(page.getByLabel('Email',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Admin',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Virtual Payouts',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Buy market',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open positions · 1'})).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Open positions · 1'})).toBeVisible();
+  await page.getByRole('button',{name:'Analytics',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Performance analytics'})).toBeVisible();
+  page.once('dialog',d=>d.accept());
+  await page.getByRole('button',{name:'Reset demo',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Open positions · 0'})).toBeVisible();
+  await page.getByRole('button',{name:'Exit demo',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Try demo',exact:true})).toBeVisible();
+});

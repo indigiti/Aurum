@@ -39,3 +39,24 @@ RULES="$(python3 -c 'import json;print(json.dumps({"action":"update-rules","rule
 curl -fsS "http://127.0.0.1:$PORT/api/admin.php" -b "$TMP/admin-cookies" -H 'Content-Type: application/json' -H "X-CSRF-Token: $(python3 -c 'import json,sys;print(json.loads(sys.argv[1])["csrf"])' "$ADMIN_REGISTER")" --data "$RULES" > "$TMP/rules.json"
 python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["rules"]["phaseTargets"]==[6.0,4.0]' "$TMP/rules.json"
 echo "PHP API auth, CSRF, admin isolation/rules, and JSON persistence passed"
+
+# Demo has its own session, no user row, and cannot access privileged APIs.
+BASE="http://127.0.0.1:$PORT/api"
+for n in 1 2; do
+  TOKEN="$(curl -fsS "$BASE/trading.php" -c "$TMP/demo$n" | python3 -c 'import json,sys;print(json.load(sys.stdin)["csrf"])')"
+  curl -fsS "$BASE/trading.php" -b "$TMP/demo$n" -c "$TMP/demo$n" -H 'Content-Type: application/json' -H "X-CSRF-Token: $TOKEN" --data '{"action":"start-demo"}' > "$TMP/demo$n.json"
+  python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["demo"] is True and d["role"]=="demo" and d["account"]["initial"]==10000000' "$TMP/demo$n.json"
+done
+DEMO_TOKEN="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["csrf"])' "$TMP/demo1.json")"
+curl -fsS "$BASE/trading.php" -b "$TMP/demo1" -H 'Content-Type: application/json' -H "X-CSRF-Token: $DEMO_TOKEN" --data '{"action":"open","side":"buy","units":1,"requestId":"demo-test-order-12345678"}' > "$TMP/demo-order.json"
+python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert len(d["account"]["positions"])==1' "$TMP/demo-order.json"
+curl -fsS "$BASE/trading.php" -b "$TMP/demo2" | python3 -c 'import json,sys;assert not json.load(sys.stdin)["account"]["positions"]'
+curl -fsS "$BASE/analytics.php" -b "$TMP/demo1" | python3 -c 'import json,sys;assert json.load(sys.stdin)["analytics"]["openPositions"]==1'
+test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/admin.php" -b "$TMP/demo1")" = 401
+test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/review.php" -b "$TMP/demo1")" = 401
+for act in create-account request-simulated-payout; do
+  test "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/trading.php" -b "$TMP/demo1" -H 'Content-Type: application/json' -H "X-CSRF-Token: $DEMO_TOKEN" --data "{\"action\":\"$act\"}")" = 403
+done
+test "$(find "$TMP/private/private-storage" -name 'user-*.json' | wc -l)" -eq 2
+curl -fsS "$BASE/trading.php" -b "$TMP/demo1" -c "$TMP/demo1" -H 'Content-Type: application/json' -H "X-CSRF-Token: $DEMO_TOKEN" --data '{"action":"reset-demo"}' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert not d["account"]["positions"] and d["account"]["balance"]==10000000'
+echo "Demo trading, session isolation, reset and privileged endpoint restrictions passed"
