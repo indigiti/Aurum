@@ -1,6 +1,7 @@
 export const SYMBOL = 'XAUUSD';
 export const INSTRUMENT = 'XAU-USDT-SWAP';
-export type Quote = {symbol:string; instrument:string; quoteCurrency:'USDT'; proxy:true; bid:number; ask:number; last:number; timestamp:number};
+import type {Quote} from '../domain/quote';
+export type {Quote} from '../domain/quote';
 export function subscribeOkx(onQuote:(q:Quote)=>void,onStatus:(s:'connecting'|'live'|'stale'|'offline')=>void):()=>void {
   let socket:WebSocket|undefined, retry:ReturnType<typeof setTimeout>|undefined;
   let stopped=false, delay=1000, last=0, received=0;

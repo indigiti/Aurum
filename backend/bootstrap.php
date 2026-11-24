@@ -11,6 +11,17 @@ require_once __DIR__.'/Challenges.php';
 require_once __DIR__.'/Analytics.php';
 require_once __DIR__.'/Backtester.php';
 require_once __DIR__.'/MarketData/OkxFeed.php';
+require_once __DIR__.'/Application/ChallengeSettings.php';
+require_once __DIR__.'/Application/CalendarSettings.php';
+require_once __DIR__.'/Application/MarketService.php';
+require_once __DIR__.'/Application/TradeService.php';
+require_once __DIR__.'/Application/IdentityPolicy.php';
+require_once __DIR__.'/Application/AuthService.php';
+require_once __DIR__.'/Application/AdminService.php';
+require_once __DIR__.'/Application/ReviewMetrics.php';
+require_once __DIR__.'/Infrastructure/VerificationMailer.php';
+require_once __DIR__.'/Infrastructure/AiReview.php';
+require_once __DIR__.'/Http/RequestContext.php';
 function aurum_private_root(): string {
     $root=getenv('AURUM_PRIVATE_PATH')?:dirname(__DIR__);
     $real=realpath($root);
@@ -41,4 +52,13 @@ function aurum_storage(): \Aurum\Storage {
 function aurum_scope(string $uid): string { return 'user-'.$uid; }
 function aurum_admin_emails(): array {
     return array_values(array_filter(array_map(static fn($v)=>strtolower(trim($v)),explode(',',(string)aurum_config('AURUM_ADMIN_EMAILS','')))));
+}
+
+function aurum_market(): \Aurum\MarketService {return new \Aurum\MarketService(new \Aurum\MarketData\OkxFeed());}
+function aurum_send_verification(string $email,string $code): bool {return \Aurum\VerificationMailer::send($email,$code);}
+function aurum_review_enabled(): bool {return \Aurum\AiReview::enabled();}
+function aurum_review(array $metrics): string {return \Aurum\AiReview::review($metrics);}
+
+function aurum_identity_policy(): \Aurum\IdentityPolicy {
+    return new \Aurum\IdentityPolicy((string)aurum_config('APP_ENV','staging'),filter_var(aurum_config('REQUIRE_EMAIL_VERIFICATION',false),FILTER_VALIDATE_BOOLEAN),aurum_admin_emails());
 }
