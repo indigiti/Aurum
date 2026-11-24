@@ -1,0 +1,58 @@
+name: Aurum Quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, pdo_mysql
+      - name: PHP lint
+        run: find backend public_html tests -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Engine tests
+        run: php tests/engine.php
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install --no-audit --no-fund
+      - name: Type check
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Static export
+        working-directory: frontend
+        env:
+          AURUM_BASE_PATH: /aurum
+        run: npm run build
+      - name: Package
+        run: bash deployment/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurum-cloudways
+          path: |
+            dist/aurum-cloudways.zip
+            dist/aurum-cloudways.zip.sha256
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aurum-cloudways
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" aurum-cloudways.zip aurum-cloudways.zip.sha256 --repo "${GITHUB_REPOSITORY}" --verify-tag --generate-notes
