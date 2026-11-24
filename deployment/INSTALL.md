@@ -21,6 +21,6 @@
 
 ## Operational limitations
 - This MVP evaluates orders, stops, targets and drawdown when the PHP API observes a fresh OKX REST quote. It does not guarantee unattended stop execution between requests. A dedicated persistent worker and server-side market stream are mandatory before any funded or paid challenge.
-- OKX XAU-USDT-SWAP is a USDT-quoted gold perpetual proxy, not spot XAU/USD. The simulator assumes USDT/USD parity for its virtual USD ledger. Validate data display rights and jurisdiction before public launch.
+- OKX XAU-USDT-SWAP is a USDT-quoted gold perpetual proxy, not spot XAU/USD. Aurum fetches its contract specification from OKX; the current contract value is 0.001 XAU per contract. Simulator positions are denominated in troy ounces (100 oz per simulated lot), not exchange contracts. The simulator assumes USDT/USD parity for its virtual USD ledger. Validate data display rights and jurisdiction before public launch.
 - No payments, real broker execution, actual payouts, identity verification, KYC/AML, support tooling or commercial challenge sales are enabled.
 - JSON is single-host staging storage. MariaDB uses one transactionally locked JSON payload per user for this MVP; high-volume production requires normalized account, order, fill, ledger and audit tables.
