@@ -7,7 +7,7 @@ final class Engine {
         $rules=Challenges::validate($rules?:Challenges::defaults());
         if(!in_array($dollars,$rules['accountSizes'],true))throw new \InvalidArgumentException('Invalid challenge');
         $base=$dollars*100;
-        return ['initial'=>$base,'balance'=>$base,'equity'=>$base,'dayBase'=>$base,'day'=>gmdate('Y-m-d'),'phase'=>1,'status'=>'active','rules'=>$rules,'positions'=>[],'pending'=>[],'journal'=>[],'requests'=>[],'days'=>[],'quoteTs'=>0,'equityCurve'=>[],'riskEvents'=>[],'backtests'=>[],'createdAt'=>time()];
+        return ['initial'=>$base,'balance'=>$base,'equity'=>$base,'dayBase'=>$base,'day'=>gmdate('Y-m-d'),'phase'=>1,'status'=>'active','rules'=>$rules,'positions'=>[],'pending'=>[],'journal'=>[],'requests'=>[],'days'=>[],'quoteTs'=>0,'equityCurve'=>[],'phaseHistory'=>[],'riskEvents'=>[],'backtests'=>[],'createdAt'=>time()];
     }
     public static function quote(array $q): array {
         $bid=(int)round((float)($q['bid']??0)*100);$ask=(int)round((float)($q['ask']??0)*100);$ts=(int)($q['timestamp']??0);
@@ -116,14 +116,14 @@ final class Engine {
             $a['pending']=[];$a['equity']=$a['balance'];$a['status']='failed';
             $a['riskEvents'][]=['type'=>$event,'equity'=>$a['equity'],'timestamp'=>$q['ts']];
         }
-        $point=['timestamp'=>$q['ts'],'balance'=>$a['balance'],'equity'=>$a['equity']];
+        $point=['timestamp'=>$q['ts'],'phase'=>$a['phase'],'balance'=>$a['balance'],'equity'=>$a['equity']];
         $lastIndex=array_key_last($a['equityCurve']);
         if($lastIndex!==null&&$a['equityCurve'][$lastIndex]['timestamp']===$q['ts'])$a['equityCurve'][$lastIndex]=$point;
         else $a['equityCurve'][]=$point;
         if(count($a['equityCurve'])>1000)$a['equityCurve']=array_slice($a['equityCurve'],-1000);
         if(count($a['riskEvents'])>500)$a['riskEvents']=array_slice($a['riskEvents'],-500);
         if($a['status']==='active'&&$a['phase']<3&&!$a['positions']&&!$a['pending']&&count($a['days'])>=(int)$rules['minTradingDays']&&$a['balance']>=$a['initial']*(1+(float)$rules['phaseTargets'][$a['phase']-1]/100)){
-            $a['phase']++;$a['balance']=$a['equity']=$a['dayBase']=$a['initial'];$a['days']=[];$a['equityCurve']=[];
+            $a['phaseHistory'][]=['phase'=>$a['phase'],'completedAt'=>$q['ts'],'profit'=>$a['balance']-$a['initial']];$a['phase']++;$a['balance']=$a['equity']=$a['dayBase']=$a['initial'];$a['days']=[];
         }
     }
 }
