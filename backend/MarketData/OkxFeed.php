@@ -22,15 +22,15 @@ final class OkxFeed {
         $curl=curl_init($url);
         curl_setopt_array($curl,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>3,CURLOPT_TIMEOUT=>6,CURLOPT_FOLLOWLOCATION=>false]);
         $body=curl_exec($curl);$status=curl_getinfo($curl,CURLINFO_RESPONSE_CODE);curl_close($curl);
-        if(!is_string($body)||$status!==200)throw new \\RuntimeException('OKX instrument metadata unavailable');
+        if(!is_string($body)||$status!==200)throw new \RuntimeException('OKX instrument metadata unavailable');
         $json=json_decode($body,true,512,JSON_THROW_ON_ERROR);
-        if(($json['code']??null)!=='0'||!is_array($json['data']??null)||!$json['data'])throw new \\RuntimeException('OKX instrument metadata unavailable');
+        if(($json['code']??null)!=='0'||!is_array($json['data']??null)||!$json['data'])throw new \RuntimeException('OKX instrument metadata unavailable');
         return $json['data'];
     }
     public function instrument(): array {
         $row=$this->publicRequest('instruments',['instType'=>'SWAP','instId'=>self::INSTRUMENT])[0];
         $ctVal=(float)($row['ctVal']??0);$lotSz=(float)($row['lotSz']??0);$tickSz=(float)($row['tickSz']??0);
-        if(($row['instId']??'')!==self::INSTRUMENT||($row['state']??'')!=='live'||($row['ctValCcy']??'')!=='XAU'||($row['settleCcy']??'')!=='USDT'||$ctVal<=0||$lotSz<=0||$tickSz<=0)throw new \\RuntimeException('Unexpected OKX contract specification');
+        if(($row['instId']??'')!==self::INSTRUMENT||($row['state']??'')!=='live'||($row['ctValCcy']??'')!=='XAU'||($row['settleCcy']??'')!=='USDT'||$ctVal<=0||$lotSz<=0||$tickSz<=0)throw new \RuntimeException('Unexpected OKX contract specification');
         return ['provider'=>'OKX','instrument'=>self::INSTRUMENT,'state'=>$row['state'],'contractType'=>$row['ctType']??null,
             'contractValue'=>$ctVal,'contractValueCurrency'=>$row['ctValCcy'],'lotSize'=>$lotSz,'minimumContracts'=>(float)($row['minSz']??$lotSz),
             'tickSize'=>$tickSz,'settlementCurrency'=>$row['settleCcy'],'contractsPerOunce'=>1/$ctVal,
