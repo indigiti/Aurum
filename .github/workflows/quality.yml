@@ -59,7 +59,7 @@ jobs:
         run: bash deployment/package.sh
       - name: Install Chromium
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       - name: Browser end-to-end tests
         env:
           APP_ENV: test
