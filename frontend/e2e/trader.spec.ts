@@ -33,7 +33,7 @@ test('trader can register, inspect challenge, analytics and navigate on mobile',
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'Menu'}).click();
   await page.getByRole('button',{name:'Journal'}).click();
-  await expect(page.getByRole('heading',{name:'Journal'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Journal',exact:true})).toBeVisible();
 });
 test('allowlisted administrator can inspect health and update challenge rules',async({page})=>{
   await mockPublicMarket(page);
