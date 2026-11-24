@@ -10,3 +10,5 @@
 .equityChart{display:block;width:100%;height:auto;max-height:220px;background:#0d1420;border:1px solid var(--line);border-radius:9px;margin:8px 0}.curveLegend{display:flex;gap:18px;color:var(--muted);font-size:11px;margin:7px 0 14px}.curveLegend span:first-child{color:var(--gold)}
 
 .calendarDay{padding:12px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:6px}.headerRight select{width:auto;max-width:170px}textarea{width:100%;padding:12px;background:#0b111b;color:#e7edf5;border:1px solid var(--line);border-radius:7px;font:inherit}input[type=checkbox]{width:auto}
+
+.certificate{border:1px solid var(--gold);padding:24px;margin:16px 0;border-radius:12px}.certificate button{display:block;margin-top:12px}@media print{body *{visibility:hidden}.certificate,.certificate *{visibility:visible;color:#111}.certificate{position:absolute;inset:0;border:2px solid #555;background:white}.certificate button{display:none}}

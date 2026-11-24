@@ -20,8 +20,12 @@ try{
     $fast=filter_var($body['fast']??9,FILTER_VALIDATE_INT);$slow=filter_var($body['slow']??21,FILTER_VALIDATE_INT);$units=filter_var($body['units']??10,FILTER_VALIDATE_INT);
     $spread=filter_var($body['spread']??0.30,FILTER_VALIDATE_FLOAT);$slippage=filter_var($body['slippageBps']??1,FILTER_VALIDATE_FLOAT);$fee=filter_var($body['feePerLot']??0,FILTER_VALIDATE_FLOAT);
     if($fast===false||$slow===false||$units===false||$spread===false||$slippage===false||$fee===false)throw new InvalidArgumentException();
-    $candles=(new OkxFeed())->candles($bar,300);$result=Backtester::run($candles,$fast,$slow,$units,$spread,$slippage,$fee);
-    $id=bin2hex(random_bytes(10));$store=aurum_storage();Accounts::authorize($store,$uid);$accountId=Accounts::requestedId();
+    $store=aurum_storage();Accounts::authorize($store,$uid);$accountId=Accounts::requestedId();
+    $method=$body['method']??'SMA';$mode=$body['mode']??'long';if(!is_string($method)||!is_string($mode))throw new InvalidArgumentException('Invalid strategy');
+    $candles=(new OkxFeed())->candles($bar,300);
+    if(($body['research']??false)===true){backtest_send(['research'=>Backtester::optimize($candles,$units,$spread,$slippage,$fee,$method,$mode)]);}
+    $result=Backtester::run($candles,$fast,$slow,$units,$spread,$slippage,$fee,$method,$mode);
+    $id=bin2hex(random_bytes(10));
     $store->transaction(Accounts::scope($uid,$accountId),function(array &$s)use($id,$result,$bar){if(!is_array($s['account']??null))throw new RuntimeException();$s['account']['backtests'][]=['id'=>$id,'bar'=>$bar,'createdAt'=>time(),'result'=>$result];if(count($s['account']['backtests'])>20)$s['account']['backtests']=array_slice($s['account']['backtests'],-20);});
     backtest_send(['id'=>$id,'bar'=>$bar,'result'=>$result]);
 }catch(InvalidArgumentException|JsonException $e){backtest_send(['error'=>$e->getMessage()?:'Invalid backtest request'],400);}

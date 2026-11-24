@@ -4,6 +4,7 @@ use Aurum\Challenges;
 use Aurum\Engine;
 use Aurum\Identity;
 use Aurum\NewsCalendar;
+use Aurum\SimulatedPayout;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
 header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store, private');header('X-Content-Type-Options: nosniff');
@@ -19,7 +20,7 @@ try{
         $users=[];
         foreach($store->all('user-') as $scope=>$state){
             $u=$state['user']??(isset($state['ownerEmail'])?['email'=>$state['ownerEmail']]:null);$a=$state['account']??null;if(!is_array($u)||!is_array($a))continue;
-            $users[]=['id'=>substr($scope,5),'email'=>$u['email'],'createdAt'=>$u['createdAt']??null,'initial'=>$a['initial'],'balance'=>$a['balance'],'equity'=>$a['equity'],'phase'=>$a['phase'],'status'=>$a['status'],'positions'=>count($a['positions']??[]),'pending'=>count($a['pending']??[]),'trades'=>count($a['journal']??[]),'riskEvents'=>array_slice(array_reverse($a['riskEvents']??[]),0,5)];
+            $users[]=['id'=>substr($scope,5),'email'=>$u['email'],'createdAt'=>$u['createdAt']??null,'initial'=>$a['initial'],'balance'=>$a['balance'],'equity'=>$a['equity'],'phase'=>$a['phase'],'status'=>$a['status'],'positions'=>count($a['positions']??[]),'pending'=>count($a['pending']??[]),'trades'=>count($a['journal']??[]),'payouts'=>$a['payouts']??[],'riskEvents'=>array_slice(array_reverse($a['riskEvents']??[]),0,5)];
         }
         $rules=Challenges::current($store);
         $driver=(string)aurum_config('STORAGE_DRIVER','json');$database='not-required';
@@ -47,16 +48,19 @@ try{
         admin_send(['ok'=>true,'rules'=>$rules]);
     }
     $target=$body['userId']??'';if(!is_string($target)||!preg_match('/^[a-f0-9]{64}(?:-a[1-4])?$/D',$target))throw new InvalidArgumentException();
-    $result=$store->transaction(aurum_scope($target),function(array &$s)use($action,$email){
+    $result=$store->transaction(aurum_scope($target),function(array &$s)use($action,$email,$body){
         if(!is_array($s['account']??null))throw new InvalidArgumentException('Account not found');
         $a=&$s['account'];$before=$a['status'];
         if($action==='lock'&&$a['status']==='active'){$a['status']='locked';$a['pending']=[];}
         elseif($action==='unlock'&&$a['status']==='locked')$a['status']='active';
+        elseif(in_array($action,['approve-simulated-payout','reject-simulated-payout'],true)){
+            SimulatedPayout::review($a,(string)($body['payoutId']??''),$action==='approve-simulated-payout',(int)(microtime(true)*1000));
+        }
         elseif($action==='reset'){
-            if($a['positions']||$a['pending'])throw new InvalidArgumentException('Close positions and cancel pending orders before reset');
+            if($a['positions']||$a['pending']||array_filter($a['payouts']??[],static fn($p)=>$p['status']==='requested'))throw new InvalidArgumentException('Close positions, cancel orders and resolve payout requests before reset');
             Engine::ensureLedger($a);Engine::book($a,$a['initial']-$a['balance'],'admin-capital-reset',(int)(microtime(true)*1000));
             $old=$a;$dollars=(int)($a['initial']/100);$rules=$a['rules']??Challenges::defaults();$a=Engine::account($dollars,$rules);
-            foreach(['ledger','journal','riskEvents','phaseHistory','requests'] as $key)$a[$key]=$old[$key]??[];
+            foreach(['ledger','journal','riskEvents','phaseHistory','requests','payouts'] as $key)$a[$key]=$old[$key]??[];
         }else throw new InvalidArgumentException('Action not permitted for current status');
         $a['riskEvents'][]=['type'=>'admin-'.$action,'admin'=>$email,'previousStatus'=>$before,'timestamp'=>(int)(microtime(true)*1000)];
         return ['status'=>$a['status']];

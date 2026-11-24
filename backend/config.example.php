@@ -9,4 +9,7 @@ return [
     'AURUM_ADMIN_EMAILS' => '',
     'REQUIRE_EMAIL_VERIFICATION' => false, // always required for production and administrators
     'MAIL_FROM' => '', // verified sender domain with working PHP mail transport
+    'AI_REVIEW_ENABLED' => false,
+    'AI_API_KEY' => '', // private OpenAI API key; never commit credentials
+    'AI_MODEL' => '', // account-enabled Responses API model
 ];

@@ -4,6 +4,7 @@ use Aurum\Engine;
 use Aurum\Identity;
 use Aurum\Accounts;
 use Aurum\NewsCalendar;
+use Aurum\SimulatedPayout;
 use Aurum\Challenges;
 use Aurum\MarketData\OkxFeed;
 require_once __DIR__.'/_bootstrap.php';
@@ -77,7 +78,7 @@ try{
         aurum_send(['authenticated'=>true,'role'=>$_SESSION['role'],'csrf'=>$_SESSION['csrf']]);
     }
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
-    if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending','create-account','list-accounts'],true))aurum_send(['error'=>'Unknown action'],400);
+    if(!in_array($action,['state','open','close','pending','cancel-pending','modify-protection','modify-pending','create-account','list-accounts','request-simulated-payout'],true))aurum_send(['error'=>'Unknown action'],400);
     $uid=(string)$_SESSION['uid'];$csrf=(string)$_SESSION['csrf'];session_write_close();
     $identity=Accounts::authorize($store,$uid);$role=Identity::admin($identity)?'admin':'trader';
     $accountId=Accounts::requestedId();
@@ -96,13 +97,14 @@ try{
             $key=$body['requestId']??'';
             if(!is_string($key)||!preg_match('/^[a-zA-Z0-9-]{16,80}$/D',$key))$error='Invalid request ID';
             elseif(array_key_exists($key,$a['requests']))$id=$a['requests'][$key];
-            elseif($q===null&&$action!=='cancel-pending')$error='Feed unavailable or stale; order blocked';
+            elseif($q===null&&!in_array($action,['cancel-pending','request-simulated-payout'],true))$error='Feed unavailable or stale; order blocked';
             else{
                 try{
                     if($action==='open')$id=Engine::open($a,$q,$body);
                     elseif($action==='close'){ $id=(string)($body['id']??'');$units=array_key_exists('units',$body)?filter_var($body['units'],FILTER_VALIDATE_INT):null;if($units===false)throw new InvalidArgumentException('Invalid closing size');Engine::close($a,$id,$q,'manual',$units); }
                     elseif($action==='modify-protection'){$id=(string)($body['id']??'');Engine::modifyProtection($a,$id,$q,$body);}
                     elseif($action==='modify-pending'){$id=Engine::modifyPending($a,(string)($body['id']??''),$q,$body);}
+                    elseif($action==='request-simulated-payout'){$gross=filter_var($body['grossCents']??null,FILTER_VALIDATE_INT);if($gross===false||$gross>100000000)throw new InvalidArgumentException('Invalid virtual amount');$id=SimulatedPayout::request($a,$gross,(int)(microtime(true)*1000));}
                     elseif($action==='pending')$id=Engine::placePending($a,$q,$body);
                     else{$id=(string)($body['id']??'');Engine::cancelPending($a,$id);}
                     $a['requests'][$key]=$id;

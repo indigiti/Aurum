@@ -7,6 +7,9 @@ require_once __DIR__.'/../backend/Identity.php';
 require_once __DIR__.'/../backend/RiskRunner.php';
 require_once __DIR__.'/../backend/Accounts.php';
 require_once __DIR__.'/../backend/NewsCalendar.php';
+require_once __DIR__.'/../backend/SimulatedPayout.php';
+require_once __DIR__.'/../backend/Backtester.php';
+require_once __DIR__.'/../backend/AiReview.php';
 function ck(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 $user=[];$code=\Aurum\Identity::issue($user,1000);
 ck(!\Aurum\Identity::verify($user,str_repeat('a',32),1001),'Wrong code rejected');
@@ -30,5 +33,11 @@ ck($q['newsStatus']==='restricted','News window');
 $restricted=\Aurum\Engine::account(100000,array_merge(\Aurum\Challenges::defaults(),['newsRestricted'=>true]));
 $blocked=false;try{\Aurum\Engine::open($restricted,$q,['side'=>'buy','units'=>1]);}catch(InvalidArgumentException){$blocked=true;}
 ck($blocked,'Restricted account cannot open exposure');
+$funded=\Aurum\Engine::account(100000);$funded['phase']=3;\Aurum\Engine::book($funded,100000,'test-profit',$now*1000);$funded['equity']=$funded['balance'];
+$pid=\Aurum\SimulatedPayout::request($funded,50000,$now*1000);\Aurum\SimulatedPayout::review($funded,$pid,true,$now*1000);
+ck($funded['balance']===10050000&&$funded['payouts'][0]['traderShare']===40000,'Virtual payout ledger and split');
+ck(\Aurum\AiReview::extract(['output'=>[['type'=>'message','content'=>[['type'=>'output_text','text'=>'Example review']]]]])==='Example review','AI response parsing');
+$rows=[];for($i=0;$i<300;$i++){$v=4000+sin($i/7)*30;$rows[]=['time'=>1700000000+$i*60,'open'=>$v,'high'=>$v+1,'low'=>$v-1,'close'=>$v,'confirmed'=>true];}
+$research=\Aurum\Backtester::optimize($rows,10,.3,1,0,'EMA','both');ck(count($research['candidates'])===5&&$research['holdoutBars']===105,'Chronological research split');
 foreach(glob($dir.'/*')?:[] as $p)unlink($p);rmdir($dir);
 echo "Identity and background risk tests passed\n";
