@@ -20,6 +20,8 @@ jobs:
         run: find backend public_html tests -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Engine tests
         run: php tests/engine.php
+      - name: PHP API smoke tests
+        run: bash tests/api-smoke.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
