@@ -12,6 +12,7 @@ final class RiskRunner {
                 $result=$store->transaction($scope,static function(array &$s)use($q){
                     $a=&$s['account'];
                     if(!is_array($a)||!in_array($a['status'],['active','locked'],true)||$q['ts']<=$a['quoteTs'])return null;
+                    if(abs((int)(microtime(true)*1000)-$q['ts'])>10000)throw new \RuntimeException('Quote expired during account sweep');
                     Engine::mark($a,$q);return $a['status'];
                 });
                 if($result!==null){$processed++;if($result==='failed')$failed++;}

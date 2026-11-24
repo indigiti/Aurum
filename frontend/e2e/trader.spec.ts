@@ -19,7 +19,7 @@ async function register(page:any,email:string){
   await page.getByLabel('Password (10+ characters)').fill('Aurum-E2E-Password-2026');
   await page.getByLabel('Virtual account').selectOption('5000');
   await page.getByRole('button',{name:'Create account'}).click();
-  await expect(page.getByText('$5,000.00').first()).toBeVisible();
+  await expect(page.locator('main > .stats strong').first()).toHaveText('$5,000.00');
 }
 test('trader can register, inspect challenge, analytics and navigate on mobile',async({page})=>{
   await mockPublicMarket(page);
@@ -35,6 +35,12 @@ test('trader can register, inspect challenge, analytics and navigate on mobile',
   await expect(page.getByText(/20 \/ 60 bars revealed/)).toBeVisible();
   await page.getByRole('button',{name:'Next bar'}).click();
   await expect(page.getByText(/21 \/ 60 bars revealed/)).toBeVisible();
+  await page.getByRole('button',{name:'Account',exact:true}).click();
+  await page.getByLabel('New virtual account').selectOption('10000');
+  await page.getByRole('button',{name:'Create another simulated account'}).click();
+  await expect(page.locator('main > .stats strong').first()).toHaveText('$10,000.00');
+  await page.getByLabel('Active trading account').selectOption('primary');
+  await expect(page.locator('main > .stats strong').first()).toHaveText('$5,000.00');
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'Menu'}).click();
   await page.getByRole('button',{name:'Journal'}).click();

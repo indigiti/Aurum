@@ -92,6 +92,7 @@ try{
     $result=$store->transaction(Accounts::scope($uid,$accountId),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
         $a=&$s['account'];Engine::ensureLedger($a);$error=null;$id=null;
+        if($q!==null&&abs((int)(microtime(true)*1000)-$q['ts'])>10000)$q=null;
         if($q!==null){try{Engine::mark($a,$q);}catch(RuntimeException $e){$q=null;}}
         if($action!=='state'){
             $key=$body['requestId']??'';
@@ -108,7 +109,6 @@ try{
                     elseif($action==='pending')$id=Engine::placePending($a,$q,$body);
                     else{$id=(string)($body['id']??'');Engine::cancelPending($a,$id);}
                     $a['requests'][$key]=$id;
-                    if(count($a['requests'])>500)$a['requests']=array_slice($a['requests'],-400,null,true);
                     if($q!==null)Engine::mark($a,$q);
                 }catch(InvalidArgumentException $e){$error=$e->getMessage();}
             }
