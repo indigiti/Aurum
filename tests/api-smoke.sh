@@ -9,7 +9,7 @@ PY
 )"
 mkdir -p "$TMP/private"
 cp -R "$ROOT/backend" "$TMP/private/"
-export APP_ENV=staging STORAGE_DRIVER=json AURUM_PRIVATE_PATH="$TMP/private" AURUM_ADMIN_EMAILS=""
+export APP_ENV=test STORAGE_DRIVER=json AURUM_PRIVATE_PATH="$TMP/private" AURUM_ADMIN_EMAILS=""
 php -S "127.0.0.1:$PORT" -t "$ROOT/public_html" >"$TMP/php.log" 2>&1 &
 PID=$!
 cleanup(){ kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; rm -rf "$TMP"; }
@@ -28,4 +28,6 @@ ADMIN="$(curl -sS -o "$TMP/admin.json" -w '%{http_code}' "http://127.0.0.1:$PORT
 test "$ADMIN" = "403"
 UID="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' "$EMAIL")"
 python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));assert d["user"]["email"]==sys.argv[2];assert d["account"]["initial"]==500000;assert d["account"]["rules"]["phaseTargets"]==[8.0,5.0]' "$TMP/private/private-storage/user-$UID.json" "$EMAIL"
+STATE="$(curl -fsS "http://127.0.0.1:$PORT/api/trading.php" -b "$TMP/cookies")"
+python3 -c 'import json,sys;d=json.loads(sys.argv[1]);assert d["account"]["initial"]==500000;assert d["feed"]=="offline"' "$STATE"
 echo "PHP API registration, CSRF, admin isolation and JSON persistence passed"
