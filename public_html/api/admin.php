@@ -24,7 +24,12 @@ try{
             $u=$state['user']??null;$a=$state['account']??null;if(!is_array($u)||!is_array($a))continue;
             $users[]=['id'=>substr($scope,5),'email'=>$u['email'],'createdAt'=>$u['createdAt']??null,'initial'=>$a['initial'],'balance'=>$a['balance'],'equity'=>$a['equity'],'phase'=>$a['phase'],'status'=>$a['status'],'positions'=>count($a['positions']??[]),'pending'=>count($a['pending']??[]),'trades'=>count($a['journal']??[]),'riskEvents'=>array_slice(array_reverse($a['riskEvents']??[]),0,5)];
         }
-        $rules=Challenges::current($store);admin_send(['users'=>$users,'rules'=>$rules,'counts'=>['users'=>count($users),'active'=>count(array_filter($users,static fn($u)=>$u['status']==='active')),'failed'=>count(array_filter($users,static fn($u)=>$u['status']==='failed'))]]);
+        $rules=Challenges::current($store);
+        $driver=(string)aurum_config('STORAGE_DRIVER','json');$database='not-required';
+        if($driver==='mariadb'){try{$store->transaction('health-probe',static fn(array &$s)=>true);$database='connected';}catch(Throwable $e){$database='error';}}
+        $market='offline';try{$quote=(new OkxFeed())->ticker();$market=($quote['stale']??true)?'stale':'live';}catch(Throwable $e){}
+        $system=['environment'=>aurum_config('APP_ENV','staging'),'storageDriver'=>$driver,'database'=>$database,'phpVersion'=>PHP_VERSION,'marketFeed'=>$market,'marketInstrument'=>OkxFeed::INSTRUMENT];
+        admin_send(['users'=>$users,'rules'=>$rules,'system'=>$system,'counts'=>['users'=>count($users),'active'=>count(array_filter($users,static fn($u)=>$u['status']==='active')),'failed'=>count(array_filter($users,static fn($u)=>$u['status']==='failed'))]]);
     }
     if($_SERVER['REQUEST_METHOD']!=='POST')admin_send(['error'=>'Method not allowed'],405);
     if(!hash_equals($csrf,$_SERVER['HTTP_X_CSRF_TOKEN']??''))admin_send(['error'=>'CSRF rejected'],403);
