@@ -10,6 +10,8 @@ require_once __DIR__.'/../backend/NewsCalendar.php';
 require_once __DIR__.'/../backend/SimulatedPayout.php';
 require_once __DIR__.'/../backend/Backtester.php';
 require_once __DIR__.'/../backend/AiReview.php';
+require_once __DIR__.'/../backend/Domain/Exposure.php';
+require_once __DIR__.'/../backend/Application/TradeService.php';
 function ck(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 $user=[];$code=\Aurum\Identity::issue($user,1000);
 ck(!\Aurum\Identity::verify($user,str_repeat('a',32),1001),'Wrong code rejected');
@@ -41,3 +43,23 @@ $rows=[];for($i=0;$i<300;$i++){$v=4000+sin($i/7)*30;$rows[]=['time'=>1700000000+
 $research=\Aurum\Backtester::optimize($rows,10,.3,1,0,'EMA','both');ck(count($research['candidates'])===5&&$research['holdoutBars']===105,'Chronological research split');
 foreach(glob($dir.'/*')?:[] as $p)unlink($p);rmdir($dir);
 echo "Identity and background risk tests passed\n";
+
+$book=\Aurum\Engine::account(100000);$q=['bid'=>400000,'ask'=>400025,'ts'=>(int)(microtime(true)*1000)];
+\Aurum\Engine::mark($book,$q);
+$b1=\Aurum\Engine::open($book,$q,['side'=>'buy','units'=>10]);$q['ts']++;
+$b2=\Aurum\Engine::open($book,$q,['side'=>'buy','units'=>20]);$q['ts']++;
+$s1=\Aurum\Engine::open($book,$q,['side'=>'sell','units'=>25]);\Aurum\Engine::mark($book,$q);
+$ex=\Aurum\Exposure::summarize($book,$q);ck($ex['buyUnits']===30&&$ex['sellUnits']===25&&$ex['netUnits']===5&&$ex['grossUnits']===55,'Exposure math');
+ck($ex['pnl']===$book['equity']-$book['balance']&&$ex['matchedPnl']===-1250,'Bid ask P&L');
+$old=$book;$bad=false;try{\Aurum\Exposure::close($book,$q,'matched',[],str_repeat('0',64));}catch(InvalidArgumentException){$bad=true;}
+ck($bad&&$book===$old,'Stale plan rejected without partial mutation');
+$state=['account'=>$book];$body=['mode'=>'matched','snapshot'=>$ex['snapshot'],'requestId'=>'matched-close-test-1234'];
+$r=\Aurum\TradeService::execute($state,$q,'bulk-close',$body);ck($r['error']===null,'Matched close API service');
+$book=$state['account'];ck(count($book['positions'])===1&&$book['positions'][$b2]['units']===5,'FIFO partial matching retains net');
+ck($book['balance']===10000000-1250&&array_sum(array_column($book['ledger'],'delta'))===$book['balance'],'Matched ledger reconciliation');
+ck($r['account']['exposure']['netUnits']===5&&$r['account']['exposure']['matchedUnits']===0,'Refreshed exposure');
+$r2=\Aurum\TradeService::execute($state,$q,'bulk-close',$body);ck($r2['error']===null&&$state['account']['balance']===$book['balance'],'Idempotent matched close');
+\Aurum\Engine::placePending($state['account'],$q,['type'=>'buy-limit','price'=>3990,'units'=>1]);
+$snap=\Aurum\Exposure::snapshot($state['account']);$r=\Aurum\TradeService::execute($state,$q,'bulk-close',['mode'=>'flatten','snapshot'=>$snap,'requestId'=>'flatten-test-12345678']);
+ck($r['error']===null&&!$state['account']['positions']&&!$state['account']['pending'],'Flatten closes positions and cancels pending');
+echo "Exposure, matched closing, stale snapshot and flatten tests passed\n";
