@@ -54,7 +54,7 @@ try{
     if(!isset($_SESSION['uid']))aurum_send(['error'=>'Sign in required'],401);
     if(!in_array($action,['state','open','close','pending','cancel-pending'],true))aurum_send(['error'=>'Unknown action'],400);
     $uid=(string)$_SESSION['uid'];$role=(string)($_SESSION['role']??'trader');$csrf=(string)$_SESSION['csrf'];session_write_close();
-    $q=null;try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}
+    $q=null;if(aurum_config('APP_ENV','staging')!=='test'){try{$q=Engine::quote((new OkxFeed())->ticker());}catch(Throwable $e){}}
     $result=$store->transaction(aurum_scope($uid),function(array &$s)use($q,$action,$body){
         if(!is_array($s['account']??null))throw new RuntimeException('Account unavailable');
         $a=&$s['account'];$error=null;$id=null;
