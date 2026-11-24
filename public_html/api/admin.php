@@ -28,7 +28,7 @@ try{
         $rules=Challenges::current($store);
         $driver=(string)aurum_config('STORAGE_DRIVER','json');$database='not-required';
         if($driver==='mariadb'){try{$store->transaction('health-probe',static fn(array &$s)=>true);$database='connected';}catch(Throwable $e){$database='error';}}
-        $market='offline';try{$quote=(new OkxFeed())->ticker();$market=($quote['stale']??true)?'stale':'live';}catch(Throwable $e){}
+        $market='offline';if(aurum_config('APP_ENV','staging')!=='test'){try{$quote=(new OkxFeed())->ticker();$market=($quote['stale']??true)?'stale':'live';}catch(Throwable $e){}}
         $system=['environment'=>aurum_config('APP_ENV','staging'),'storageDriver'=>$driver,'database'=>$database,'phpVersion'=>PHP_VERSION,'marketFeed'=>$market,'marketInstrument'=>OkxFeed::INSTRUMENT];
         admin_send(['users'=>$users,'rules'=>$rules,'system'=>$system,'counts'=>['users'=>count($users),'active'=>count(array_filter($users,static fn($u)=>$u['status']==='active')),'failed'=>count(array_filter($users,static fn($u)=>$u['status']==='failed'))]]);
     }
