@@ -6,6 +6,7 @@ require_once __DIR__.'/../backend/Storage.php';
 require_once __DIR__.'/../backend/Analytics.php';
 require_once __DIR__.'/../backend/Backtester.php';
 use Aurum\Engine;
+use Aurum\Challenges;
 use Aurum\Backtester;
 use Aurum\Analytics;
 function check(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);}
