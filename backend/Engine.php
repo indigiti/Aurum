@@ -62,10 +62,19 @@ final class Engine {
         $entry=(int)round((float)$price*100);
         $isLimit=str_ends_with($type,'limit');
         if($isLimit?(($side==='buy'&&$entry>=$q['ask'])||($side==='sell'&&$entry<=$q['bid'])):(($side==='buy'&&$entry<=$q['ask'])||($side==='sell'&&$entry>=$q['bid'])))throw new \InvalidArgumentException('Pending price is on the wrong side of market');
+        $levels=[];
+        foreach(['sl','tp'] as $key){
+            $v=$r[$key]??null;
+            if($v===null||$v===''){$levels[$key]=null;continue;}
+            if(!is_numeric($v)||!is_finite((float)$v)||(float)$v<=0||(float)$v>1000000)throw new \InvalidArgumentException('Invalid pending protection');
+            $x=(int)round((float)$v*100);$below=($side==='buy')===($key==='sl');
+            if($below?$x>=$entry:$x<=$entry)throw new \InvalidArgumentException('Invalid pending protection direction');
+            $levels[$key]=(float)$v;
+        }
         $used=0;foreach($a['positions'] as $p)$used+=$p['units'];foreach($a['pending'] as $p)$used+=$p['units'];
         $maxUnits=(int)($a['rules']['maxUnits']??1000);$leverage=max(1,(int)($a['rules']['leverage']??30));
         if($used+$units>$maxUnits||self::margin($a)+(int)ceil($entry*$units/$leverage)>$a['equity'])throw new \InvalidArgumentException('Exposure or margin limit');
-        $id=bin2hex(random_bytes(12));$a['pending'][$id]=['id'=>$id,'type'=>$type,'side'=>$side,'units'=>$units,'price'=>$entry,'sl'=>$r['sl']??null,'tp'=>$r['tp']??null,'createdAt'=>$q['ts']];
+        $id=bin2hex(random_bytes(12));$a['pending'][$id]=['id'=>$id,'type'=>$type,'side'=>$side,'units'=>$units,'price'=>$entry]+$levels+['createdAt'=>$q['ts']];
         return $id;
     }
     public static function cancelPending(array &$a,string $id): void {
@@ -107,8 +116,12 @@ final class Engine {
             $a['pending']=[];$a['equity']=$a['balance'];$a['status']='failed';
             $a['riskEvents'][]=['type'=>$event,'equity'=>$a['equity'],'timestamp'=>$q['ts']];
         }
-        $a['equityCurve'][]=['timestamp'=>$q['ts'],'balance'=>$a['balance'],'equity'=>$a['equity']];
+        $point=['timestamp'=>$q['ts'],'balance'=>$a['balance'],'equity'=>$a['equity']];
+        $lastIndex=array_key_last($a['equityCurve']);
+        if($lastIndex!==null&&$a['equityCurve'][$lastIndex]['timestamp']===$q['ts'])$a['equityCurve'][$lastIndex]=$point;
+        else $a['equityCurve'][]=$point;
         if(count($a['equityCurve'])>1000)$a['equityCurve']=array_slice($a['equityCurve'],-1000);
+        if(count($a['riskEvents'])>500)$a['riskEvents']=array_slice($a['riskEvents'],-500);
         if($a['status']==='active'&&$a['phase']<3&&!$a['positions']&&!$a['pending']&&count($a['days'])>=(int)$rules['minTradingDays']&&$a['balance']>=$a['initial']*(1+(float)$rules['phaseTargets'][$a['phase']-1]/100)){
             $a['phase']++;$a['balance']=$a['equity']=$a['dayBase']=$a['initial'];$a['days']=[];$a['equityCurve']=[];
         }
