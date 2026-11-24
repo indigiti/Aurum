@@ -17,8 +17,8 @@ export default function Home(){
  const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [size,setSize]=useState(100000);
  const [units,setUnits]=useState(1);const [sl,setSl]=useState('');const [tp,setTp]=useState('');const [notice,setNotice]=useState('');const [busy,setBusy]=useState(false);
  const [bar,setBar]=useState('1m');const [tab,setTab]=useState('Terminal');const [menu,setMenu]=useState(false);
- const host=useRef<HTMLDivElement>(null);const series=useRef<ISeriesApi<'Candlestick'>>();
- const candle=useRef<Candle>();const requestPending=useRef(false);
+ const host=useRef<HTMLDivElement>(null);const series=useRef<ISeriesApi<'Candlestick'>|undefined>(undefined);
+ const candle=useRef<Candle|undefined>(undefined);const requestPending=useRef(false);
  const consume=(r:Result)=>{if(r.csrf){token.current=r.csrf;setCsrf(r.csrf)}if(r.authenticated!==undefined)setAuth(r.authenticated);if(r.account)setAccount(r.account);if(r.feed)setFeed(r.feed);};
  async function api(body?:Record<string,unknown>){const r=await fetch('./api/trading.php',body?{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':token.current},body:JSON.stringify(body)}:{cache:'no-store'});const data:Result=await r.json();consume(data);if(!r.ok)throw Error(data.error||'Request failed');return data}
  async function refresh(){if(requestPending.current)return;requestPending.current=true;try{await api()}catch{setFeed('offline')}finally{requestPending.current=false}}
